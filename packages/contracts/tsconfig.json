@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "strict": true, "skipLibCheck": false, "types": [], "lib": ["ES2022"] },
+  "include": ["src/**/*.d.ts"]
+}

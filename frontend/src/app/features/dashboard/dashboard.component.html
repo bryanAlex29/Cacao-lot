@@ -1,0 +1,324 @@
+<a class="skip-link" href="#dashboard-main">Saltar al contenido</a>
+<div class="workspace">
+  <aside class="sidebar">
+    <div class="brand">
+      <span aria-hidden="true">◒</span><strong>CacaoSmart <small>IoT</small></strong>
+    </div>
+    <p class="brand-caption">Riego inteligente para<br />cultivos de cacao</p>
+    <nav aria-label="Navegación principal">
+      <a class="active" [routerLink]="['/parcelas', plot()?.id, 'dashboard']" aria-current="page"
+        ><span aria-hidden="true">⌂</span> Inicio</a
+      >
+      <a href="#readings"><span aria-hidden="true">◴</span> Monitoreo</a>
+      <a routerLink="/parcelas"><span aria-hidden="true">▦</span> Parcelas</a>
+      <span class="pending">Diagnóstico IA <small>Próximamente</small></span>
+      <a href="#history"><span aria-hidden="true">↗</span> Historial</a>
+      <span class="pending">Riego <small>Control local ESP32</small></span>
+      <span class="pending">Consumo de agua <small>No disponible</small></span>
+      <span class="pending">Alertas <small>Próximamente</small></span>
+      <span class="pending">Reportes <small>Próximamente</small></span>
+      <span class="pending">Configuración <small>Mediante API</small></span>
+    </nav>
+    <div class="sidebar-footer">
+      <span aria-hidden="true">❧</span><strong>TerriTech</strong>
+      <p>Hackathon CITIC 2026<br />Chone · Manabí</p>
+      <a routerLink="/estado">Estado técnico</a>
+    </div>
+  </aside>
+  <div class="main-area">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">TU CULTIVO, CONECTADO</span>
+        <h1>{{ plot()?.name ?? 'Panel de monitoreo' }}</h1>
+        <p>{{ plot()?.locationLabel ?? 'Cargando parcela…' }}</p>
+      </div>
+      <div class="account">
+        <span
+          >{{ auth.user()?.name
+          }}<small>{{
+            auth.user()?.role === 'ADMIN' ? 'Administrador' : 'Agricultor'
+          }}</small></span
+        ><button type="button" class="secondary" (click)="logout()">Salir</button>
+      </div>
+    </header>
+    <main id="dashboard-main" tabindex="-1">
+      @if (error()) {
+        <div class="notice error" role="alert">
+          {{ error() }} <a routerLink="/parcelas">Mis parcelas</a>
+        </div>
+      }
+      <section class="hero" aria-label="CacaoSmart IoT">
+        <div>
+          <span class="eyebrow">CACAO · TECNOLOGÍA · TERRITORIO</span>
+          <h2>Conoce tu cultivo.<br />Cuida cada gota.</h2>
+          <p>Monitoreo de tres zonas y trazabilidad del riego local.</p>
+        </div>
+        <svg viewBox="0 0 300 190" aria-hidden="true">
+          <path d="M20 175Q170 160 245 12" fill="none" stroke="#7baa59" stroke-width="4" />
+          <g fill="#397640">
+            <ellipse cx="97" cy="127" rx="47" ry="17" transform="rotate(28 97 127)" />
+            <ellipse cx="221" cy="108" rx="53" ry="20" transform="rotate(-30 221 108)" />
+            <ellipse cx="179" cy="37" rx="48" ry="17" transform="rotate(30 179 37)" />
+          </g>
+          <g transform="rotate(24 166 108)">
+            <ellipse cx="166" cy="108" rx="35" ry="62" fill="#dc9b3c" />
+            <ellipse cx="166" cy="108" rx="22" ry="60" fill="#bd7427" />
+            <ellipse cx="166" cy="108" rx="9" ry="60" fill="#e6ad51" />
+          </g>
+        </svg>
+        <div class="hero-note">
+          Observa · Comprende · Conserva<span>Información, no órdenes remotas</span>
+        </div>
+      </section>
+      <section class="controls panel" aria-label="Selección de telemetría">
+        <label
+          >Dispositivo<select aria-label="Dispositivo de telemetría" [formControl]="deviceControl">
+            <option value="">
+              {{
+                options().length ? 'Selecciona un dispositivo' : 'Sin dispositivos de este origen'
+              }}
+            </option>
+            @for (device of options(); track device.id) {
+              <option [value]="device.id">
+                {{ device.serial }}{{ device.isActive ? '' : ' · Deshabilitado' }}
+              </option>
+            }
+          </select></label
+        >
+        @if (devMode) {
+          <label
+            >Origen<select aria-label="Origen de telemetría" [formControl]="sourceControl">
+              <option value="real">Mediciones reales</option>
+              <option value="demo">Datos simulados · DEMO</option>
+            </select></label
+          >
+        }
+        <button
+          type="button"
+          class="secondary"
+          (click)="telemetry.reload()"
+          [disabled]="!selected() || telemetry.busy()"
+        >
+          {{ telemetry.busy() ? 'Actualizando…' : 'Actualizar' }}
+        </button>
+        @if (deviceTotal() > 100) {
+          <div class="device-pages">
+            <button
+              (click)="loadDevices(deviceOffset() - 100)"
+              [disabled]="deviceOffset() === 0 || loading()"
+            >
+              Anteriores</button
+            ><span
+              >Dispositivos {{ deviceOffset() + 1 }}–{{ deviceOffset() + devices().length }} de
+              {{ deviceTotal() }}</span
+            ><button
+              (click)="loadDevices(deviceOffset() + 100)"
+              [disabled]="deviceOffset() + 100 >= deviceTotal() || loading()"
+            >
+              Siguientes
+            </button>
+          </div>
+        }
+      </section>
+      @if (source() === 'demo') {
+        <p class="notice demo" role="status">
+          <strong>DEMO · Datos simulados</strong> — No representan mediciones del cultivo.
+        </p>
+      }
+      @if (loading()) {
+        <p role="status">Cargando dispositivos y parcela…</p>
+      }
+      @if (!selected() && !loading()) {
+        <p class="notice">
+          {{
+            options().length
+              ? 'Selecciona un dispositivo para ver sus tres sondas sin mezclar datos de otros equipos.'
+              : 'No hay dispositivos disponibles de este origen en esta página. No se muestran datos de ejemplo.'
+          }}
+        </p>
+      }
+      @if (selected()) {
+        <div class="status-row">
+          <span class="status" [class.warning]="stale()">● {{ statusLabel() }}</span
+          ><span
+            >Canal en vivo:
+            {{
+              telemetry.stream() === 'connected'
+                ? 'Conectado'
+                : telemetry.stream() === 'connecting'
+                  ? 'Conectando…'
+                  : 'Sin conexión · consulta REST cada 15 s'
+            }}</span
+          ><span
+            >Última lectura:
+            {{ timestamp() ? (timestamp() | date: 'dd/MM/yyyy HH:mm:ss') : 'Sin datos' }}</span
+          >
+          @if (telemetry.stream() === 'error') {
+            <button type="button" (click)="telemetry.reconnect()">Reconectar canal</button>
+          }
+        </div>
+        @if (telemetry.error()) {
+          <p class="notice error" role="alert">
+            {{ telemetry.error() }}
+            <button type="button" (click)="telemetry.reload()">Reintentar</button>
+          </p>
+        }
+        @if (stale() && reading()) {
+          <p class="notice">
+            La conexión o los datos no están al día. Los valores conservados muestran su fecha
+            original.
+          </p>
+        }
+      }
+      <div id="readings" class="readings-grid" [attr.aria-busy]="telemetry.busy()">
+        <section class="panel soil-panel">
+          <div class="panel-title">
+            <h2>Humedad del suelo</h2>
+            <span>Tres zonas independientes</span>
+          </div>
+          <div class="soil-grid">
+            @for (sensor of sensors; track sensor.code) {
+              <app-soil-sensor-card
+                [number]="sensor.number"
+                [zone]="sensor.zone"
+                [value]="reading()?.soilMoisture?.[sensor.code] ?? null"
+                [quality]="reading()?.quality?.[sensor.code] ?? 'missing'"
+                [timestamp]="timestamp()"
+                [stale]="stale()"
+              />
+            }
+          </div>
+        </section>
+        <section class="panel environment">
+          <h2>Condiciones ambientales</h2>
+          <div class="environment-grid">
+            <div>
+              <span class="metric-icon" aria-hidden="true">♨</span>
+              <h3>Temperatura</h3>
+              <strong
+                >{{
+                  reading()?.temperatureC === null || !reading()
+                    ? '—'
+                    : (reading()?.temperatureC | number: '1.0-1')
+                }}<small> °C</small></strong
+              ><span>{{
+                reading()?.temperatureC === null || !reading() ? 'Sin datos' : 'Sin calibrar'
+              }}</span>
+            </div>
+            <div>
+              <span class="metric-icon" aria-hidden="true">♧</span>
+              <h3>Humedad ambiental</h3>
+              <strong
+                >{{
+                  reading()?.airHumidityPct === null || !reading()
+                    ? '—'
+                    : (reading()?.airHumidityPct | number: '1.0-1')
+                }}<small> %</small></strong
+              ><span>{{
+                reading()?.airHumidityPct === null || !reading() ? 'Sin datos' : 'Sin calibrar'
+              }}</span>
+            </div>
+          </div>
+          <p class="note">
+            {{ timestamp() ? (timestamp() | date: 'dd/MM HH:mm:ss') : 'Esperando una lectura' }}
+          </p>
+        </section>
+        <section class="panel rain">
+          <h2>Lluvia</h2>
+          <span class="rain-icon" aria-hidden="true">☂</span
+          ><strong>{{
+            reading()?.rainDetected === null || !reading()
+              ? 'Sin datos'
+              : reading()?.rainDetected
+                ? 'Lluvia detectada'
+                : 'Sin lluvia detectada'
+          }}</strong>
+          <p>Detección binaria<br />No mide precipitación en mm</p>
+        </section>
+      </div>
+      <div class="middle-grid">
+        <section class="panel irrigation">
+          <div class="irrigation-heading">
+            <span class="eyebrow">DECISIÓN LOCAL · ESP32</span>
+            <h2>Sistema de riego</h2>
+          </div>
+          <div class="irrigation-body">
+            <span aria-hidden="true">♧</span>
+            <div>
+              <strong>{{
+                reading()?.valve?.relayCommandedOpen === null || !reading()
+                  ? 'Orden del relé desconocida'
+                  : reading()?.valve?.relayCommandedOpen
+                    ? 'Orden de apertura'
+                    : 'Orden de cierre'
+              }}</strong>
+              <p>Estado informado por el dispositivo. La web no controla la válvula.</p>
+            </div>
+          </div>
+          <div class="irrigation-metrics">
+            <div>
+              Confirmación física<strong>{{
+                reading()?.valve?.feedbackOpen === null || !reading()
+                  ? 'No disponible'
+                  : reading()?.valve?.feedbackOpen
+                    ? 'Abierta'
+                    : 'Cerrada'
+              }}</strong>
+            </div>
+            <div>Duración<strong>No disponible</strong></div>
+            <div>Agua aplicada<strong>No disponible</strong></div>
+          </div>
+        </section>
+        <app-diagnosis-preview />
+      </div>
+      <div class="bottom-grid">
+        <section id="history" class="panel history">
+          <div class="panel-title">
+            <h2>Histórico de humedad</h2>
+            <div class="range" aria-label="Intervalo histórico">
+              @for (days of [1, 7, 30]; track days) {
+                <button
+                  type="button"
+                  [class.active]="telemetry.days() === days"
+                  [attr.aria-pressed]="telemetry.days() === days"
+                  (click)="telemetry.setDays(days)"
+                >
+                  {{ days === 1 ? '24 h' : days + ' días' }}
+                </button>
+              }
+            </div>
+          </div>
+          <app-soil-history-chart
+            [readings]="telemetry.history().items"
+            [intervalSeconds]="telemetry.snapshot()?.device?.expectedIntervalSeconds ?? 60"
+          />
+          <div class="pagination">
+            <button
+              type="button"
+              class="secondary"
+              (click)="telemetry.page(telemetry.offset() - 100)"
+              [disabled]="telemetry.offset() === 0 || telemetry.busy()"
+            >
+              Más recientes</button
+            ><span
+              >{{ telemetry.history().total }} lecturas · página
+              {{ telemetry.offset() / 100 + 1 }}</span
+            ><button
+              type="button"
+              class="secondary"
+              (click)="telemetry.page(telemetry.offset() + 100)"
+              [disabled]="telemetry.offset() + 100 >= telemetry.history().total || telemetry.busy()"
+            >
+              Más antiguas
+            </button>
+          </div>
+        </section>
+        <app-dashboard-insights />
+      </div>
+      <footer class="page-footer">
+        CacaoSmart IoT · TerriTech CITIC 2026 · Hora local del navegador · El ESP32 conserva el
+        control seguro del riego.
+      </footer>
+    </main>
+  </div>
+</div>

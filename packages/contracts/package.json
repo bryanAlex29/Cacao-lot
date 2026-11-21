@@ -1,0 +1,9 @@
+{
+  "name": "@cacaosmart/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "types": "src/index.d.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

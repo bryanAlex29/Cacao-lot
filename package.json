@@ -1,0 +1,46 @@
+{
+  "name": "cacaosmart-iot",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "packages/contracts"
+  ],
+  "engines": {
+    "node": "^22.12.0",
+    "npm": ">=11.6.2"
+  },
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "setup:env": "node scripts/setup-env.mjs",
+    "setup:auth-env": "node scripts/setup-auth-env.mjs",
+    "admin:create": "node scripts/bootstrap-admin.mjs",
+    "simulator:provision": "node scripts/simulator-provision.mjs",
+    "simulator": "node scripts/simulator.mjs",
+    "test:simulator": "node --test scripts/simulator.test.mjs",
+    "test:integration": "node scripts/integration-test.mjs",
+    "test:browser": "node scripts/integration-test.mjs --browser",
+    "dev:frontend": "npm run start --workspace=@cacaosmart/frontend",
+    "dev:backend": "npm run start:dev --workspace=@cacaosmart/backend",
+    "build": "npm run build --workspace=@cacaosmart/backend && npm run build --workspace=@cacaosmart/frontend",
+    "lint": "eslint frontend/src backend packages scripts eslint.config.mjs",
+    "format:check": "prettier --check frontend backend packages scripts package.json docker-compose.yml eslint.config.mjs .prettierrc.json README.md docs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspace=@cacaosmart/backend && npm run test --workspace=@cacaosmart/frontend",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:stop": "docker compose stop postgres",
+    "db:generate": "npm run prisma:generate --workspace=@cacaosmart/backend",
+    "db:validate": "npm run prisma:validate --workspace=@cacaosmart/backend",
+    "db:migrate": "npm run prisma:migrate --workspace=@cacaosmart/backend",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.0"
+  }
+}

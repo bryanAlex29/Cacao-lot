@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.angular/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+!**/.env.example
+backend/generated/
+.local/

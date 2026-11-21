@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  FARMER
+}
+
+enum DeviceStatus {
+  UNKNOWN
+  ONLINE
+  STALE
+  OFFLINE
+}
+
+enum SensorCode {
+  soil_1
+  soil_2
+  soil_3
+  temperatureC
+  airHumidityPct
+  rainDetected
+}
+
+enum SensorVariable {
+  SOIL_MOISTURE
+  TEMPERATURE
+  AIR_HUMIDITY
+  RAIN_DETECTED
+}
+
+enum SensorUnit {
+  PERCENT
+  CELSIUS
+  BOOLEAN
+}
+
+enum TelemetrySource {
+  real
+  demo
+}
+
+enum DataQuality {
+  valid
+  missing
+  invalid
+  uncalibrated
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(100)
+  email        String   @unique @db.VarChar(254)
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(FARMER)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  plots        Plot[]
+
+  @@map("users")
+}
+
+model Plot {
+  id            String    @id @default(uuid()) @db.Uuid
+  ownerId       String    @map("owner_id") @db.Uuid
+  owner         User      @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  name          String    @db.VarChar(100)
+  locationLabel String    @map("location_label") @db.VarChar(200)
+  areaM2        Float?    @map("area_m2")
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  devices       Device[]
+
+  @@index([ownerId, archivedAt])
+  @@map("plots")
+}
+
+model Device {
+  id                      String          @id @default(uuid()) @db.Uuid
+  plotId                  String          @map("plot_id") @db.Uuid
+  plot                    Plot            @relation(fields: [plotId], references: [id], onDelete: Restrict)
+  serial                  String          @unique @db.VarChar(100)
+  credentialHash          String          @map("credential_hash") @db.VarChar(64)
+  status                  DeviceStatus    @default(UNKNOWN)
+  isActive                Boolean         @default(true) @map("is_active")
+  lastSeenAt              DateTime?       @map("last_seen_at") @db.Timestamptz(3)
+  createdAt               DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  sensors                 Sensor[]
+  source                  TelemetrySource @default(real)
+  expectedIntervalSeconds Int             @default(60) @map("expected_interval_seconds")
+  readings                Reading[]
+
+  @@index([plotId])
+  @@map("devices")
+}
+
+model Sensor {
+  id                  String         @id @default(uuid()) @db.Uuid
+  deviceId            String         @map("device_id") @db.Uuid
+  device              Device         @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  code                SensorCode
+  variable            SensorVariable
+  unit                SensorUnit
+  zone                String?        @db.VarChar(1)
+  enabled             Boolean        @default(true)
+  calibrationMetadata Json?          @map("calibration_metadata")
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  soilReadings        SoilReading[]
+
+  @@unique([deviceId, code])
+  @@map("sensors")
+}
+
+model Reading {
+  id                 String          @id @default(uuid()) @db.Uuid
+  deviceId           String          @map("device_id") @db.Uuid
+  device             Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  eventId            String          @map("event_id") @db.VarChar(120)
+  payloadHash        String          @map("payload_hash") @db.VarChar(64)
+  recordedAt         DateTime?       @map("recorded_at") @db.Timestamptz(3)
+  receivedAt         DateTime        @map("received_at") @db.Timestamptz(3)
+  effectiveAt        DateTime        @map("effective_at") @db.Timestamptz(3)
+  ingestionOrder     BigInt          @unique @default(autoincrement()) @map("ingestion_order")
+  timestampOrigin    String          @map("timestamp_origin") @db.VarChar(6)
+  source             TelemetrySource
+  temperatureC       Float?          @map("temperature_c")
+  airHumidityPct     Float?          @map("air_humidity_pct")
+  rainDetected       Boolean?        @map("rain_detected")
+  relayCommandedOpen Boolean?        @map("relay_commanded_open")
+  feedbackOpen       Boolean?        @map("feedback_open")
+  quality            Json
+  soilReadings       SoilReading[]
+
+  @@unique([deviceId, eventId])
+  @@index([deviceId, source, effectiveAt(sort: Desc), receivedAt(sort: Desc), ingestionOrder(sort: Desc)], map: "readings_device_source_time_idx")
+  @@map("readings")
+}
+
+model SoilReading {
+  id          String      @id @default(uuid()) @db.Uuid
+  readingId   String      @map("reading_id") @db.Uuid
+  reading     Reading     @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  sensorId    String      @map("sensor_id") @db.Uuid
+  sensor      Sensor      @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  moisturePct Float?      @map("moisture_pct")
+  quality     DataQuality
+
+  @@unique([readingId, sensorId])
+  @@index([sensorId])
+  @@map("soil_readings")
+}

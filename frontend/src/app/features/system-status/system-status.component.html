@@ -1,0 +1,98 @@
+<a class="skip-link" href="#main">Saltar al contenido</a>
+<div class="shell">
+  <aside class="sidebar" aria-label="Identidad del proyecto">
+    <div class="brand-mark" aria-hidden="true">CS</div>
+    <strong class="brand">CacaoSmart IoT</strong>
+    <p>Riego inteligente para<br />cultivos de cacao</p>
+    <div class="current-page">Inicio · Estado del proyecto</div>
+    <footer>Chone, Manabí, Ecuador<br /><strong>TerriTech · CITIC 2026</strong></footer>
+  </aside>
+  <div class="workspace">
+    <header>
+      <div><strong>CacaoSmart IoT</strong><span>Monitoreo y riego inteligente</span></div>
+      <a class="phase" href="/login">Acceder a la plataforma</a>
+    </header>
+    <main id="main" tabindex="-1">
+      <section class="intro" aria-labelledby="page-title">
+        <span class="eyebrow">EL CULTIVO, EN EL CENTRO</span>
+        <h1 id="page-title">Una base sólida para<br />cuidar el cacao.</h1>
+        <p>
+          Estamos preparando la plataforma de monitoreo. Esta pantalla verifica la infraestructura;
+          todavía no muestra mediciones del cultivo.
+        </p>
+      </section>
+
+      <section class="health-panel" aria-labelledby="health-title" [attr.aria-busy]="checking()">
+        <div class="panel-heading">
+          <div>
+            <h2 id="health-title">Estado de los servicios</h2>
+            <p>Comprobación real de la API y su conexión a PostgreSQL.</p>
+          </div>
+          <button type="button" (click)="refresh()" [disabled]="checking()">
+            {{ checking() ? 'Comprobando…' : 'Volver a comprobar' }}
+          </button>
+        </div>
+        <div class="service-grid" aria-live="polite">
+          <article class="service">
+            <span class="service-label">API · NestJS</span>
+            <h3>
+              {{
+                checking()
+                  ? 'Comprobando…'
+                  : status()?.api === 'up'
+                    ? 'Disponible'
+                    : 'No disponible'
+              }}
+            </h3>
+            <span class="badge" [class.good]="!checking() && status()?.api === 'up'">{{
+              checking()
+                ? 'En consulta'
+                : status()?.api === 'up'
+                  ? 'Proceso activo'
+                  : 'Revisar arranque de la API'
+            }}</span>
+            <p>La respuesta confirma el servicio, no la conexión del ESP32.</p>
+          </article>
+          <article class="service">
+            <span class="service-label">Base de datos · PostgreSQL</span>
+            <h3>
+              {{
+                checking()
+                  ? 'Comprobando…'
+                  : status()?.database === 'up'
+                    ? 'Disponible'
+                    : 'No disponible'
+              }}
+            </h3>
+            <span class="badge" [class.good]="!checking() && status()?.database === 'up'">{{
+              checking()
+                ? 'En consulta'
+                : status()?.database === 'up'
+                  ? 'Consulta de salud correcta'
+                  : 'Sin confirmación de conexión'
+            }}</span>
+            <p>Verificación mediante Prisma. No implica que existan datos de campo.</p>
+          </article>
+        </div>
+        @if (checkedAt()) {
+          <p class="last-check">
+            Última comprobación: {{ checkedAt() | date: 'dd/MM/yyyy HH:mm:ss' }} · hora local del
+            navegador.
+          </p>
+        }
+      </section>
+
+      <section class="notice" aria-labelledby="next-title">
+        <h2 id="next-title">El siguiente paso: conectar los sensores</h2>
+        <p>
+          El acceso seguro, las parcelas y el registro de dispositivos ya tienen una base funcional.
+          Después se incorporarán tres sensores independientes, histórico y actualizaciones en vivo.
+        </p>
+        <p>
+          <strong>Sin datos de sensores todavía.</strong> El diagnóstico IA, las métricas de agua y
+          la predicción se incorporarán en sus fases. El ESP32 conserva el control local del riego.
+        </p>
+      </section>
+    </main>
+  </div>
+</div>

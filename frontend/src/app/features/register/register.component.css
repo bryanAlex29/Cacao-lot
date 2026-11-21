@@ -1,0 +1,11 @@
+.access {
+  padding-block: 28px;
+}
+.access .field-help {
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+.auth-switch {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}

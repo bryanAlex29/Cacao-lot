@@ -1,0 +1,139 @@
+<a class="skip-link" href="#plots-main">Saltar al contenido</a>
+<div class="workspace">
+  <aside>
+    <strong class="brand">CacaoSmart IoT</strong>
+    <p>Riego inteligente para<br />cultivos de cacao</p>
+    <nav aria-label="Navegación principal">
+      <a routerLink="/parcelas" aria-current="page" class="active">Mis parcelas</a>
+      <a routerLink="/estado">Estado del sistema</a>
+    </nav>
+    <p class="phase">Monitoreo por parcela<br />Datos reales y DEMO separados</p>
+  </aside>
+  <div>
+    <header>
+      <div>
+        <strong>{{ auth.user()?.name }}</strong><span>{{
+          auth.user()?.role === 'ADMIN' ? 'Administrador' : 'Agricultor'
+        }}</span>
+      </div>
+      <button type="button" class="secondary" (click)="logout()">Cerrar sesión</button>
+    </header>
+    <main id="plots-main" tabindex="-1">
+      <section class="intro">
+        <span class="eyebrow">TU CULTIVO, TU INFORMACIÓN</span>
+        <h1>Mis parcelas</h1>
+        <p>Solo se muestran las parcelas asociadas a tu cuenta.</p>
+      </section>
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+      @if (auth.user()?.role === 'ADMIN') {
+        <section class="panel" aria-labelledby="create-title">
+          <h2 id="create-title">Registrar una parcela propia</h2>
+          <form [formGroup]="form" (ngSubmit)="create()" [attr.aria-busy]="saving()">
+            <div class="fields">
+              <label
+                >Nombre<input
+                  formControlName="name"
+                  maxlength="100"
+                  required
+                  [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid"
+              /></label>
+              <label
+                >Ubicación<input
+                  formControlName="locationLabel"
+                  maxlength="200"
+                  required
+                  [attr.aria-invalid]="
+                    form.controls.locationLabel.touched && form.controls.locationLabel.invalid
+                  "
+              /></label>
+              <label
+                >Superficie en m² (opcional)<input
+                  type="number"
+                  formControlName="areaM2"
+                  min="0.000001"
+                  step="any"
+                  [attr.aria-invalid]="
+                    form.controls.areaM2.touched && form.controls.areaM2.invalid
+                  "
+              /></label>
+            </div>
+            @if (form.touched && form.invalid) {
+              <p class="validation" role="alert">
+                Completa nombre y ubicación; la superficie, si se indica, debe ser positiva.
+              </p>
+            }
+            <button type="submit" [disabled]="saving() || busy()">
+              {{ saving() ? 'Guardando…' : 'Crear parcela' }}
+            </button>
+          </form>
+        </section>
+      }
+      <section class="panel" aria-labelledby="list-title" [attr.aria-busy]="busy()">
+        <div class="panel-heading">
+          <h2 id="list-title">Parcelas registradas · {{ total() }}</h2>
+          <button
+            type="button"
+            class="secondary"
+            (click)="load(offset())"
+            [disabled]="busy() || saving()"
+          >
+            Actualizar
+          </button>
+        </div>
+        <div aria-live="polite">
+          @if (busy()) {
+            <p>Cargando tus parcelas…</p>
+          } @else if (!plots().length && !error()) {
+            <p class="empty">
+              No tienes parcelas registradas.
+              {{
+                auth.user()?.role === 'ADMIN'
+                  ? 'Puedes crear una con el formulario superior.'
+                  : 'Solicita al equipo que revise la provisión de tus parcelas.'
+              }}
+            </p>
+          }
+          <div class="plot-grid">
+            @for (plot of plots(); track plot.id) {
+              <article>
+                <span class="tag">PARCELA</span>
+                <h3>{{ plot.name }}</h3>
+                <p>{{ plot.locationLabel }}</p>
+                <p>
+                  Superficie:
+                  {{ plot.areaM2 === null ? 'No registrada' : (plot.areaM2 | number) + ' m²' }}
+                </p>
+                <a [routerLink]="['/parcelas', plot.id, 'dashboard']">Abrir panel de monitoreo →</a>
+              </article>
+            }
+          </div>
+        </div>
+        <div class="pagination">
+          <button
+            type="button"
+            class="secondary"
+            (click)="load(offset() - 20)"
+            [disabled]="offset() === 0 || busy() || saving()"
+          >
+            Anterior
+          </button>
+          <span>Desde {{ total() ? offset() + 1 : 0 }} de {{ total() }}</span>
+          <button
+            type="button"
+            class="secondary"
+            (click)="load(offset() + 20)"
+            [disabled]="offset() + 20 >= total() || busy() || saving()"
+          >
+            Siguiente
+          </button>
+        </div>
+      </section>
+      <p class="note">
+        Dispositivos y sensores se gestionan por ahora mediante la API documentada. No hay controles
+        de válvula, diagnósticos ni cálculos de ahorro en esta vista.
+      </p>
+    </main>
+  </div>
+</div>
