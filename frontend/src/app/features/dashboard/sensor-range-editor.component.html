@@ -1,0 +1,104 @@
+<dialog
+  #dialog
+  aria-labelledby="range-editor-title"
+  aria-describedby="range-editor-note"
+  (cancel)="close($event)"
+>
+  <h2 id="range-editor-title">Configurar rango · {{ target().label }}</h2>
+  <p class="source">
+    {{
+      target().selection.source === 'demo'
+        ? 'DEMO · Datos simulados'
+        : 'Dispositivo de mediciones reales'
+    }}
+  </p>
+  <p id="range-editor-note">
+    Solo monitoreo. Este cambio no calibra sensores ni modifica el riego del ESP32.
+  </p>
+  <form [formGroup]="form" (ngSubmit)="save()" [attr.aria-busy]="saving()">
+    <fieldset [disabled]="saving() || consulting()">
+      <legend>Valores en {{ unit }}</legend>
+      <label for="range-min">Mínimo ({{ unit }})</label>
+      <input
+        id="range-min"
+        type="number"
+        step="any"
+        [min]="lower"
+        max="100"
+        formControlName="minValue"
+        required
+        autofocus
+        [attr.aria-invalid]="form.controls.minValue.touched && form.controls.minValue.invalid"
+      />
+      <label for="range-max">Máximo ({{ unit }})</label>
+      <input
+        id="range-max"
+        type="number"
+        step="any"
+        [min]="lower"
+        max="100"
+        formControlName="maxValue"
+        required
+        [attr.aria-invalid]="form.controls.maxValue.touched && form.controls.maxValue.invalid"
+      />
+    </fieldset>
+    <p class="note">
+      {{ lower }} ≤ mínimo &lt; máximo ≤ 100 {{ unit }}. Límites técnicos, no recomendaciones
+      agronómicas.
+    </p>
+    @if (form.touched && form.invalid) {
+      <p class="error" role="alert">
+        Introduce dos números finitos dentro de los límites indicados; el mínimo debe ser menor que
+        el máximo.
+      </p>
+    }
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+    @if (message()) {
+      <p role="status">{{ message() }}</p>
+    }
+    @if (canRecover()) {
+      <button
+        type="button"
+        class="secondary"
+        (click)="loadCurrent()"
+        [disabled]="consulting() || saving()"
+      >
+        {{ consulting() ? 'Consultando…' : 'Consultar rango actual' }}
+      </button>
+    }
+    @if (current(); as response) {
+      <section class="current" aria-label="Rango actual del servidor" aria-live="polite">
+        @if (response.threshold; as range) {
+          <p>
+            Actual: mínimo {{ range.minValue | number: '1.0-2' }} {{ unit }}, máximo
+            {{ range.maxValue | number: '1.0-2' }} {{ unit }} · versión {{ range.version }}.
+          </p>
+        } @else {
+          <p>Actualmente no hay rango configurado.</p>
+        }
+        <p>
+          Tu formulario no se ha cambiado. Esta acción reemplazará lo escrito por el rango
+          consultado.
+        </p>
+        <button type="button" class="secondary" (click)="useCurrent()" [disabled]="consulting()">
+          Usar rango actual en el formulario
+        </button>
+      </section>
+    }
+    <div class="actions">
+      <button
+        type="button"
+        class="secondary"
+        (click)="close()"
+        [disabled]="saving() || consulting()"
+      >
+        Cancelar
+      </button>
+      <button type="submit" [disabled]="saving() || consulting() || blocked()">
+        {{ saving() ? 'Guardando…' : 'Guardar rango' }}
+      </button>
+    </div>
+  </form>
+</dialog>

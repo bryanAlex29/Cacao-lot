@@ -1,8 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, input } from '@angular/core';
+import type { TelemetrySubscription } from '@cacaosmart/contracts';
+import { OfflineAlertsPanelComponent } from './offline-alerts-panel.component';
+import { MoistureAlertsPanelComponent } from './moisture-alerts-panel.component';
+import type { ThresholdSensor } from '../../core/sensor-thresholds/sensor-thresholds.types';
 
 @Component({
   selector: 'app-dashboard-insights',
   standalone: true,
+  imports: [OfflineAlertsPanelComponent, MoistureAlertsPanelComponent],
   template: `<div class="top">
       <section class="water">
         <h2>Agua y consumo</h2>
@@ -10,12 +15,10 @@ import { Component } from '@angular/core';
         <p>Ahorro <strong>No calculable</strong></p>
         <span class="note">Requiere caudal calibrado y línea base verificable.</span>
       </section>
-      <section class="alerts">
+      <section class="alerts" id="alerts" tabindex="-1">
         <h2>Alertas</h2>
-        <p>Motor de alertas pendiente.</p>
-        <span class="note"
-          >La ausencia de alertas no confirma condiciones normales del cultivo.</span
-        >
+        <app-offline-alerts-panel [selection]="selection()" />
+        <app-moisture-alerts-panel [selection]="selection()" [sensors]="sensors()" />
       </section>
     </div>
     <section class="ods">
@@ -121,4 +124,7 @@ import { Component } from '@angular/core';
     `,
   ],
 })
-export class DashboardInsightsComponent {}
+export class DashboardInsightsComponent {
+  readonly sensors = input<ThresholdSensor[]>([]);
+  readonly selection = input<TelemetrySubscription | null>(null);
+}

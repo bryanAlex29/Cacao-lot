@@ -10,7 +10,13 @@
   <div class="workspace">
     <header>
       <div><strong>CacaoSmart IoT</strong><span>Monitoreo y riego inteligente</span></div>
-      <a class="phase" href="/login">Acceder a la plataforma</a>
+      @if (auth.user()) {
+        <a class="return-link" routerLink="/parcelas">
+          <span aria-hidden="true">←</span> Volver a mis parcelas
+        </a>
+      } @else {
+        <a class="phase" routerLink="/login">Acceder a la plataforma</a>
+      }
     </header>
     <main id="main" tabindex="-1">
       <section class="intro" aria-labelledby="page-title">

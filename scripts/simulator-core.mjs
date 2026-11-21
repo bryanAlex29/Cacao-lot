@@ -1,5 +1,8 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
+/** Safe classification: never includes credentials, URLs or response bodies. */
+export class SimulatorUnavailableError extends Error {}
+
 export function validateSimulatorConfig(config) {
   const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
   const endpoint = new URL(config.endpoint);
@@ -65,7 +68,8 @@ export async function sendWithRetry(
       });
     } catch {
       if (signal?.aborted) throw new Error('Simulación detenida');
-      if (attempt >= retries) throw new Error('API local no disponible; reintentos agotados');
+      if (attempt >= retries)
+        throw new SimulatorUnavailableError('API local no disponible; reintentos agotados');
     }
     if (response?.ok) {
       const result = await response.json();
@@ -75,7 +79,28 @@ export async function sendWithRetry(
     }
     if (response && response.status !== 429 && response.status < 500)
       throw new Error(`Telemetría rechazada (HTTP ${response.status}); no se reintenta`);
-    if (attempt >= retries) throw new Error('Reintentos agotados');
+    if (attempt >= retries) throw new SimulatorUnavailableError('Reintentos agotados');
     await wait(500 * 2 ** attempt, undefined, { signal });
+  }
+}
+
+/** Continuous demos survive API restarts; finite runs still fail after the bounded retry batch. */
+export async function sendUntilAvailable(
+  config,
+  payload,
+  { persistent = false, signal, send = sendWithRetry, wait = delay, onWaiting = () => {} } = {},
+) {
+  let interruptions = 0;
+  for (;;) {
+    signal?.throwIfAborted();
+    try {
+      return await send(config, payload, { signal });
+    } catch (error) {
+      if (signal?.aborted || !persistent || !(error instanceof SimulatorUnavailableError))
+        throw error;
+      const delayMs = Math.min(5000 * 2 ** Math.min(interruptions++, 3), 30000);
+      onWaiting(delayMs);
+      await wait(delayMs, undefined, { signal });
+    }
   }
 }

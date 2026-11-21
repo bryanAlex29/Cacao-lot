@@ -1,7 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import { validateSimulatorConfig, simulatorPayload, sendWithRetry } from './simulator-core.mjs';
+import {
+  validateSimulatorConfig,
+  simulatorPayload,
+  sendUntilAvailable,
+} from './simulator-core.mjs';
 
 const controller = new AbortController();
 process.once('SIGINT', () => controller.abort());
@@ -24,10 +28,17 @@ try {
   console.log('DEMO · Datos simulados; Ctrl+C para detener. No controla hardware.');
   for (let sequence = 0; sequence < count; sequence++) {
     controller.signal.throwIfAborted();
-    const result = await sendWithRetry(
+    const result = await sendUntilAvailable(
       config,
       simulatorPayload(config.deviceId, runId, sequence, new Date().toISOString()),
-      { signal: controller.signal },
+      {
+        signal: controller.signal,
+        persistent: count === Infinity,
+        onWaiting: (ms) =>
+          console.log(
+            `DEMO · API temporalmente no disponible. Nuevo intento en ${ms / 1000} s con el mismo evento; Ctrl+C para detener.`,
+          ),
+      },
     );
     console.log(`DEMO · Evento ${sequence + 1} ${result.duplicate ? 'ya recibido' : 'persistido'}`);
     if (sequence + 1 < count) await delay(5000, undefined, { signal: controller.signal });

@@ -33,9 +33,9 @@ export function configureApp(app: INestApplication): void {
     const schema = new DocumentBuilder()
       .setTitle('CacaoSmart IoT API')
       .setDescription(
-        'Autenticación, parcelas, dispositivos y telemetría con permisos por propietario. Socket.IO /telemetry documentado en docs/phase-4.md.',
+        'Autenticación, parcelas, dispositivos, telemetría y rangos por sensor con permisos por propietario. Socket.IO /telemetry documentado en docs/phase-4.md; rangos en docs/phase-5.md.',
       )
-      .setVersion('0.4.0')
+      .setVersion('0.5.0')
       .addBearerAuth()
       .build();
     SwaggerModule.setup('api/v1/docs', app, SwaggerModule.createDocument(app, schema));

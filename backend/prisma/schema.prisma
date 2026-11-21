@@ -53,28 +53,37 @@ enum DataQuality {
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  name         String   @db.VarChar(100)
-  email        String   @unique @db.VarChar(254)
-  passwordHash String   @map("password_hash")
-  role         UserRole @default(FARMER)
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  plots        Plot[]
+  id                         String                 @id @default(uuid()) @db.Uuid
+  name                       String                 @db.VarChar(100)
+  email                      String                 @unique @db.VarChar(254)
+  passwordHash               String                 @map("password_hash")
+  role                       UserRole               @default(FARMER)
+  isActive                   Boolean                @default(true) @map("is_active")
+  createdAt                  DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  plots                      Plot[]
+  thresholdUpdates           SensorThreshold[]
+  thresholdAudits            SensorThresholdAudit[]
+  acknowledgedOfflineAlerts  OfflineAlert[]
+  moisturePolicies           MoistureAlertPolicy[]
+  moisturePolicyAudits       MoisturePolicyAudit[]
+  acknowledgedMoistureAlerts MoistureAlert[]
 
   @@map("users")
 }
 
 model Plot {
-  id            String    @id @default(uuid()) @db.Uuid
-  ownerId       String    @map("owner_id") @db.Uuid
-  owner         User      @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  name          String    @db.VarChar(100)
-  locationLabel String    @map("location_label") @db.VarChar(200)
-  areaM2        Float?    @map("area_m2")
-  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  devices       Device[]
+  id              String                 @id @default(uuid()) @db.Uuid
+  ownerId         String                 @map("owner_id") @db.Uuid
+  owner           User                   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  name            String                 @db.VarChar(100)
+  locationLabel   String                 @map("location_label") @db.VarChar(200)
+  areaM2          Float?                 @map("area_m2")
+  archivedAt      DateTime?              @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  devices         Device[]
+  thresholdAudits SensorThresholdAudit[]
+  offlineAlerts   OfflineAlert[]
+  moistureAlerts  MoistureAlert[]
 
   @@index([ownerId, archivedAt])
   @@map("plots")
@@ -94,25 +103,34 @@ model Device {
   source                  TelemetrySource @default(real)
   expectedIntervalSeconds Int             @default(60) @map("expected_interval_seconds")
   readings                Reading[]
+  offlineAlerts           OfflineAlert[]
+  moistureAlerts          MoistureAlert[]
 
   @@index([plotId])
   @@map("devices")
 }
 
 model Sensor {
-  id                  String         @id @default(uuid()) @db.Uuid
-  deviceId            String         @map("device_id") @db.Uuid
-  device              Device         @relation(fields: [deviceId], references: [id], onDelete: Restrict)
-  code                SensorCode
-  variable            SensorVariable
-  unit                SensorUnit
-  zone                String?        @db.VarChar(1)
-  enabled             Boolean        @default(true)
-  calibrationMetadata Json?          @map("calibration_metadata")
-  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  soilReadings        SoilReading[]
+  id                   String                 @id @default(uuid()) @db.Uuid
+  deviceId             String                 @map("device_id") @db.Uuid
+  device               Device                 @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  code                 SensorCode
+  variable             SensorVariable
+  unit                 SensorUnit
+  zone                 String?                @db.VarChar(1)
+  enabled              Boolean                @default(true)
+  calibrationMetadata  Json?                  @map("calibration_metadata")
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  soilReadings         SoilReading[]
+  thresholds           SensorThreshold[]
+  thresholdAudits      SensorThresholdAudit[]
+  moisturePolicy       MoistureAlertPolicy?
+  moistureState        MoistureAlertState?
+  moistureAlerts       MoistureAlert[]
+  moisturePolicyAudits MoisturePolicyAudit[]
 
   @@unique([deviceId, code])
+  @@unique([id, variable, unit])
   @@map("sensors")
 }
 
@@ -138,6 +156,7 @@ model Reading {
 
   @@unique([deviceId, eventId])
   @@index([deviceId, source, effectiveAt(sort: Desc), receivedAt(sort: Desc), ingestionOrder(sort: Desc)], map: "readings_device_source_time_idx")
+  @@index([deviceId, ingestionOrder], map: "readings_device_ingestion_idx")
   @@map("readings")
 }
 
@@ -153,4 +172,136 @@ model SoilReading {
   @@unique([readingId, sensorId])
   @@index([sensorId])
   @@map("soil_readings")
+}
+
+model SensorThreshold {
+  id          String         @id @default(uuid()) @db.Uuid
+  sensorId    String         @map("sensor_id") @db.Uuid
+  variable    SensorVariable
+  unit        SensorUnit
+  sensor      Sensor         @relation(fields: [sensorId, variable, unit], references: [id, variable, unit], onDelete: Restrict, onUpdate: Restrict)
+  minValue    Float          @map("min_value")
+  maxValue    Float          @map("max_value")
+  hysteresis  Float          @default(0)
+  effectiveAt DateTime       @map("effective_at") @db.Timestamptz(3)
+  updatedBy   String         @map("updated_by") @db.Uuid
+  actor       User           @relation(fields: [updatedBy], references: [id], onDelete: Restrict)
+  version     Int
+
+  @@unique([sensorId, variable])
+  @@map("sensor_thresholds")
+}
+
+model SensorThresholdAudit {
+  id        String          @id @default(uuid()) @db.Uuid
+  sensorId  String          @map("sensor_id") @db.Uuid
+  sensor    Sensor          @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  plotId    String          @map("plot_id") @db.Uuid
+  plot      Plot            @relation(fields: [plotId], references: [id], onDelete: Restrict)
+  actorId   String          @map("actor_id") @db.Uuid
+  actor     User            @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  source    TelemetrySource
+  variable  SensorVariable
+  oldValue  Json?           @map("old_value")
+  newValue  Json            @map("new_value")
+  version   Int
+  changedAt DateTime        @map("changed_at") @db.Timestamptz(3)
+
+  @@unique([sensorId, variable, version])
+  @@index([plotId, changedAt])
+  @@map("sensor_threshold_audits")
+}
+
+// Connectivity episodes only. Acknowledgment never changes the observed condition.
+model OfflineAlert {
+  id                      String          @id @default(uuid()) @db.Uuid
+  deviceId                String          @map("device_id") @db.Uuid
+  device                  Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  plotId                  String          @map("plot_id") @db.Uuid
+  plot                    Plot            @relation(fields: [plotId], references: [id], onDelete: Restrict)
+  source                  TelemetrySource
+  lastSeenAt              DateTime        @map("last_seen_at") @db.Timestamptz(3)
+  expectedIntervalSeconds Int             @map("expected_interval_seconds")
+  detectedAt              DateTime        @map("detected_at") @db.Timestamptz(3)
+  closedAt                DateTime?       @map("closed_at") @db.Timestamptz(3)
+  closeReason             String?         @map("close_reason") @db.VarChar(32)
+  acknowledgedAt          DateTime?       @map("acknowledged_at") @db.Timestamptz(3)
+  acknowledgedBy          String?         @map("acknowledged_by") @db.Uuid
+  acknowledgedByUser      User?           @relation(fields: [acknowledgedBy], references: [id], onDelete: Restrict)
+
+  @@index([plotId, source, deviceId, detectedAt(sort: Desc), id(sort: Desc)], map: "offline_alerts_page_idx")
+  @@index([deviceId, closedAt], map: "offline_alerts_device_state_idx")
+  @@map("offline_alerts")
+}
+
+model MoistureAlertPolicy {
+  sensorId          String   @id @map("sensor_id") @db.Uuid
+  sensor            Sensor   @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  recoveryMarginPct Float    @map("recovery_margin_pct")
+  version           Int
+  updatedAt         DateTime @map("updated_at") @db.Timestamptz(3)
+  updatedBy         String   @map("updated_by") @db.Uuid
+  actor             User     @relation(fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@map("moisture_alert_policies")
+}
+
+model MoisturePolicyAudit {
+  id        String   @id @default(uuid()) @db.Uuid
+  sensorId  String   @map("sensor_id") @db.Uuid
+  sensor    Sensor   @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  actorId   String   @map("actor_id") @db.Uuid
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  version   Int
+  oldValue  Json?    @map("old_value")
+  newValue  Json     @map("new_value")
+  changedAt DateTime @map("changed_at") @db.Timestamptz(3)
+
+  @@unique([sensorId, version])
+  @@map("moisture_policy_audits")
+}
+
+model MoistureAlertState {
+  sensorId         String    @id @map("sensor_id") @db.Uuid
+  sensor           Sensor    @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  policyVersion    Int       @map("policy_version")
+  thresholdVersion Int       @map("threshold_version")
+  lastOrder        BigInt    @map("last_order")
+  lastEffectiveAt  DateTime? @map("last_effective_at") @db.Timestamptz(3)
+  lowCount         Int       @default(0) @map("low_count")
+  recoveryCount    Int       @default(0) @map("recovery_count")
+  firstLowAt       DateTime? @map("first_low_at") @db.Timestamptz(3)
+
+  @@map("moisture_alert_states")
+}
+
+model MoistureAlert {
+  id                String          @id @default(uuid()) @db.Uuid
+  sensorId          String          @map("sensor_id") @db.Uuid
+  sensor            Sensor          @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  deviceId          String          @map("device_id") @db.Uuid
+  device            Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  plotId            String          @map("plot_id") @db.Uuid
+  plot              Plot            @relation(fields: [plotId], references: [id], onDelete: Restrict)
+  code              SensorCode
+  source            TelemetrySource
+  minValue          Float           @map("min_value")
+  maxValue          Float           @map("max_value")
+  recoveryMarginPct Float           @map("recovery_margin_pct")
+  thresholdVersion  Int             @map("threshold_version")
+  policyVersion     Int             @map("policy_version")
+  firstLowAt        DateTime        @map("first_low_at") @db.Timestamptz(3)
+  confirmedAt       DateTime        @map("confirmed_at") @db.Timestamptz(3)
+  triggerValue      Float           @map("trigger_value")
+  triggerEventId    String          @map("trigger_event_id") @db.VarChar(120)
+  detectedAt        DateTime        @map("detected_at") @db.Timestamptz(3)
+  closedAt          DateTime?       @map("closed_at") @db.Timestamptz(3)
+  closeReason       String?         @map("close_reason") @db.VarChar(32)
+  acknowledgedAt    DateTime?       @map("acknowledged_at") @db.Timestamptz(3)
+  acknowledgedBy    String?         @map("acknowledged_by") @db.Uuid
+  actor             User?           @relation(fields: [acknowledgedBy], references: [id], onDelete: Restrict)
+
+  @@index([deviceId, source, detectedAt(sort: Desc), id(sort: Desc)], map: "moisture_alerts_page_idx")
+  @@index([sensorId, closedAt])
+  @@map("moisture_alerts")
 }

@@ -1,27 +1,31 @@
-import { Component, input } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import type { SensorHealth } from '@cacaosmart/contracts';
+import type { DataSource, SensorHealth, SoilSensorId } from '@cacaosmart/contracts';
+import { SensorRangeComponent } from './sensor-range.component';
+import type { SensorRangeState } from '../../core/sensor-thresholds/sensor-thresholds.types';
+import { assessSensor } from '../../core/sensor-thresholds/sensor-assessment';
+import { SensorAssessmentComponent } from './sensor-assessment.component';
 
 @Component({
   selector: 'app-soil-sensor-card',
   standalone: true,
-  imports: [DatePipe, DecimalPipe],
-  template: `<article [class.missing]="value() === null">
+  imports: [DatePipe, DecimalPipe, SensorRangeComponent, SensorAssessmentComponent],
+  template: `<article [class.missing]="assessment().value === null">
     <span class="leaf" aria-hidden="true">♧</span>
     <h3>Sensor {{ number() }}</h3>
     <p>Zona {{ zone() }}</p>
-    <strong>{{ value() === null ? '—' : (value() | number: '1.0-1') }}<small> %</small></strong>
-    <span class="quality">{{
-      value() === null
-        ? 'Sin datos'
-        : stale()
-          ? 'Desactualizado'
-          : quality() === 'uncalibrated'
-            ? 'Sin calibrar'
-            : 'Dato recibido'
-    }}</span>
-    <div class="track" aria-hidden="true"><div [style.width.%]="value() ?? 0"></div></div>
-    <p class="note">Sin rango configurado</p>
+    <strong
+      >{{ assessment().value === null ? '—' : (assessment().value | number: '1.0-1')
+      }}<small> %</small></strong
+    >
+    <app-sensor-assessment [assessment]="assessment()" />
+    <div class="track" aria-hidden="true">
+      <div
+        [style.width.%]="assessment().value ?? 0"
+        [style.background]="assessment().barColor"
+      ></div>
+    </div>
+    <app-sensor-range [state]="range()" [canEdit]="canEdit()" (configure)="configure.emit()" />
     <time>{{ timestamp() ? (timestamp() | date: 'dd/MM HH:mm:ss') : 'Sin actualización' }}</time>
   </article>`,
   styles: [
@@ -59,15 +63,6 @@ import type { SensorHealth } from '@cacaosmart/contracts';
       small {
         font-size: 17px;
       }
-      .quality {
-        display: inline-block;
-        background: #fff3d6;
-        color: #704900;
-        padding: 5px 9px;
-        border-radius: 20px;
-        font-size: 12px;
-        margin: 12px 0;
-      }
       .track {
         height: 7px;
         background: #e2e7e2;
@@ -77,10 +72,6 @@ import type { SensorHealth } from '@cacaosmart/contracts';
       .track div {
         height: 100%;
         background: #087d16;
-      }
-      .note {
-        margin: 12px 0 6px;
-        font-size: 11px;
       }
       time {
         font-size: 11px;
@@ -93,10 +84,25 @@ import type { SensorHealth } from '@cacaosmart/contracts';
   ],
 })
 export class SoilSensorCardComponent {
+  readonly code = input.required<SoilSensorId>();
+  readonly source = input.required<DataSource>();
+  readonly canEdit = input(false);
+  readonly configure = output<void>();
   readonly number = input.required<number>();
   readonly zone = input.required<string>();
   readonly value = input<number | null>(null);
   readonly quality = input<SensorHealth>('missing');
   readonly timestamp = input<string | null>(null);
   readonly stale = input(false);
+  readonly range = input.required<SensorRangeState>();
+  readonly assessment = computed(() =>
+    assessSensor({
+      code: this.code(),
+      source: this.source(),
+      value: this.value(),
+      quality: this.quality(),
+      stale: this.stale(),
+      range: this.range(),
+    }),
+  );
 }

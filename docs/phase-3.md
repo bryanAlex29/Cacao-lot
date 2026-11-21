@@ -57,7 +57,19 @@ Conexión derivada del intervalo esperado configurado: sin contacto **unknown**,
 
 Seguir comandos de [README](../README.md#telemetría-y-simulación-local). Provisión exige `NODE_ENV=development`, PostgreSQL loopback, `TELEMETRY_MODE=demo` y UUID explícito de usuario activo. Crea recursos claramente DEMO y guarda clave solo en `.local/simulator.json`, con creación exclusiva (`wx`, modo 0600 donde el sistema lo aplica). En Windows conservar ACL privada de usuario; no compartir esa carpeta ni subirla. Si existe el archivo, la CLI falla sin crear recursos ni sobrescribirlo.
 
-`npm run simulator -- --count 5` o continuo hasta Ctrl+C. Configuración fija local; rechaza destino remoto, credenciales URL, redirects y fuente no demo. API confirma origen demo en cada respuesta; si no, se detiene. Tres series ficticias deterministas independientes por número de evento; ID de ejecución único y secuencia estable. Reintentos conservan exactamente cuerpo/ID/hora, máximo cuatro intentos, backoff de 0.5/1/2 s y timeout de 5 s por request. 4xx salvo 429 son definitivos. No se simulan litros, ahorro ni feedback físico.
+`npm run simulator -- --count 5` o continuo hasta Ctrl+C. Configuración fija local; rechaza destino remoto, credenciales URL, redirects y fuente no demo. API confirma origen demo en cada respuesta; si no, se detiene. Tres series ficticias deterministas independientes por número de evento; ID de ejecución único y secuencia estable. Reintentos conservan exactamente cuerpo/ID/hora, cuatro intentos por lote, backoff de 0.5/1/2 s y timeout de 5 s por request. 4xx salvo 429 son definitivos. No se simulan litros, ahorro ni feedback físico.
+
+### Recuperación de cortes temporales (corrección posterior)
+
+Durante desarrollo se observó una detención del simulador en la ventana de reinicio de Nodemon: última lectura recibida a las 06:43:10 UTC y nuevo arranque de Nest a las 06:43:22 UTC del 21/11/2026. El comportamiento anterior terminaba el proceso al agotar un único lote, aunque el corte fuera temporal y credenciales/dispositivo siguieran activos.
+
+`SimulatorUnavailableError` identifica únicamente agotamiento por red, 429 o 5xx. `sendUntilAvailable` permite que **solo el modo continuo** espere 5/10/20/30 segundos (máximo 30 entre lotes) y reenvíe el mismo payload. No crea nuevos IDs ni fechas para un mensaje pendiente; los reintentos siguen siendo idempotentes y la primera muestra recuperada puede estar desactualizada, sin falsificar su hora. Los valores nuevos continúan después de confirmar el evento pendiente.
+
+- `--count` sigue fallando tras su lote acotado; las pruebas o ejecuciones finitas no quedan esperando indefinidamente.
+- 400/401/403/409 y confirmación de origen real permanecen definitivos; no se omiten permisos ni se mezclan orígenes para «recuperar».
+- Ctrl+C/SIGTERM interrumpe tanto envío como espera. Los mensajes de recuperación no imprimen credenciales, payloads ni respuestas privadas.
+- Archivos afectados: `scripts/simulator-core.mjs`, `scripts/simulator.mjs`, `scripts/simulator.test.mjs`; sin cambios a la API, rate limit, firmware o política de riego.
+- Verificación específica: **10 pruebas del simulador y 73 de integración correctas**, incluida recuperación HTTP local real después de cuatro 503 con un único cuerpo/ID/fecha; también modo finito, cancelación y rechazos permanentes. Lint, build, formato de archivos afectados y smoke correctos. Se confirmaron dos eventos DEMO en la API local y actividad reciente del proceso continuo reiniciado con autorización del usuario.
 
 No hay semillas automáticas ni se crearon recursos demo en la base principal al implementar. La prueba de extremo a extremo usa solo base temporal y credenciales efímeras. Para detener: Ctrl+C; la conexión caduca por intervalo. Para deshabilitar definitivamente, usar PATCH de dispositivo autorizado; volver a `TELEMETRY_MODE=real` cierra el canal demo. No borrar recursos ni configuración privada sin revisar primero.
 

@@ -117,3 +117,108 @@ export interface TelemetryIngestionResult {
   duplicate: boolean;
   reading: TelemetryReading;
 }
+
+export type ThresholdVariable = 'SOIL_MOISTURE' | 'TEMPERATURE' | 'AIR_HUMIDITY';
+export type ThresholdUnit = 'PERCENT' | 'CELSIUS';
+
+export interface PutSensorThresholdInput {
+  variable: ThresholdVariable;
+  unit: ThresholdUnit;
+  minValue: number;
+  maxValue: number;
+  /** 0 creates a range; otherwise must match the current version. */
+  expectedVersion: number;
+}
+
+export interface SensorThresholdRange {
+  id: string;
+  minValue: number;
+  maxValue: number;
+  /** Reserved; always 0 until alert hysteresis is implemented. */
+  hysteresis: number;
+  effectiveAt: string;
+  updatedBy: string;
+  version: number;
+}
+
+export interface SensorThresholdResponse {
+  sensorId: string;
+  deviceId: string;
+  plotId: string;
+  source: DataSource;
+  variable: ThresholdVariable;
+  unit: ThresholdUnit;
+  threshold: SensorThresholdRange | null;
+}
+
+/** Historical monitoring only; intervals are [from, to), never firmware policy. */
+export interface SensorThresholdInterval {
+  from: string;
+  to: string;
+  threshold: Pick<SensorThresholdRange, 'minValue' | 'maxValue' | 'effectiveAt' | 'version'> | null;
+}
+
+export interface SensorThresholdHistoryResponse extends Omit<SensorThresholdResponse, 'threshold'> {
+  from: string;
+  to: string;
+  intervals: SensorThresholdInterval[];
+}
+
+export type OfflineAlertCloseReason =
+  'CONTACT_RESTORED' | 'MONITORING_STOPPED' | 'INTERVAL_CHANGED';
+
+/** Device connectivity only, not sensor quality, crop health or valve control. */
+export interface DeviceOfflineAlert extends TelemetrySubscription {
+  id: string;
+  type: 'DEVICE_OFFLINE';
+  severity: 'warning';
+  lastSeenAt: string;
+  expectedIntervalSeconds: number;
+  detectedAt: string;
+  closedAt: string | null;
+  closeReason: OfflineAlertCloseReason | null;
+  acknowledgedAt: string | null;
+}
+
+export interface MoisturePolicy {
+  recoveryMarginPct: number;
+  version: number;
+  updatedAt: string;
+}
+export interface MoisturePolicyResponse extends TelemetrySubscription {
+  sensorId: string;
+  code: SoilSensorId;
+  range: Pick<SensorThresholdRange, 'minValue' | 'maxValue' | 'version' | 'effectiveAt'> | null;
+  policy: MoisturePolicy | null;
+  status:
+    | 'unconfigured'
+    | 'no_range'
+    | 'incompatible_margin'
+    | 'disabled'
+    | 'real_uncalibrated'
+    | 'ready';
+}
+export interface PutMoisturePolicyInput {
+  recoveryMarginPct: number;
+  expectedVersion: number;
+  expectedThresholdVersion: number;
+}
+export type MoistureAlertCloseReason = 'RECOVERED' | 'CONFIGURATION_CHANGED' | 'MONITORING_STOPPED';
+export interface SoilMoistureAlert extends TelemetrySubscription {
+  id: string;
+  sensorId: string;
+  code: SoilSensorId;
+  type: 'LOW_SOIL_MOISTURE';
+  minValue: number;
+  maxValue: number;
+  recoveryMarginPct: number;
+  thresholdVersion: number;
+  policyVersion: number;
+  firstLowAt: string;
+  confirmedAt: string;
+  triggerValue: number;
+  detectedAt: string;
+  closedAt: string | null;
+  closeReason: MoistureAlertCloseReason | null;
+  acknowledgedAt: string | null;
+}

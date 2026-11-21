@@ -15,7 +15,13 @@
       <a href="#history"><span aria-hidden="true">↗</span> Historial</a>
       <span class="pending">Riego <small>Control local ESP32</small></span>
       <span class="pending">Consumo de agua <small>No disponible</small></span>
-      <span class="pending">Alertas <small>Próximamente</small></span>
+      <a
+        [routerLink]="[]"
+        fragment="alerts"
+        queryParamsHandling="preserve"
+        (click)="scrollToAlerts()"
+        ><span aria-hidden="true">⚠</span> Alertas</a
+      >
       <span class="pending">Reportes <small>Próximamente</small></span>
       <span class="pending">Configuración <small>Mediante API</small></span>
     </nav>
@@ -46,6 +52,9 @@
         <div class="notice error" role="alert">
           {{ error() }} <a routerLink="/parcelas">Mis parcelas</a>
         </div>
+      }
+      @if (rangeMessage()) {
+        <p class="notice" role="status">{{ rangeMessage() }}</p>
       }
       <section class="hero" aria-label="CacaoSmart IoT">
         <div>
@@ -96,10 +105,10 @@
         <button
           type="button"
           class="secondary"
-          (click)="telemetry.reload()"
-          [disabled]="!selected() || telemetry.busy()"
+          (click)="refresh()"
+          [disabled]="!selected() || telemetry.busy() || thresholds.busy()"
         >
-          {{ telemetry.busy() ? 'Actualizando…' : 'Actualizar' }}
+          {{ telemetry.busy() || thresholds.busy() ? 'Actualizando…' : 'Actualizar' }}
         </button>
         @if (deviceTotal() > 100) {
           <div class="device-pages">
@@ -169,6 +178,23 @@
             original.
           </p>
         }
+        @if (thresholds.hasErrors()) {
+          <p class="notice" role="status">
+            No se pudieron consultar algunos rangos. Las mediciones se consultan por separado.
+            <button
+              type="button"
+              class="secondary"
+              (click)="thresholds.reload()"
+              [disabled]="thresholds.busy()"
+            >
+              Reintentar rangos
+            </button>
+          </p>
+        }
+        <p class="note">
+          Rangos de monitoreo · No validan la calibración ni modifican el riego del ESP32. Consulta
+          automática cada 60 s.
+        </p>
       }
       <div id="readings" class="readings-grid" [attr.aria-busy]="telemetry.busy()">
         <section class="panel soil-panel">
@@ -179,12 +205,19 @@
           <div class="soil-grid">
             @for (sensor of sensors; track sensor.code) {
               <app-soil-sensor-card
+                [code]="sensor.code"
+                [source]="source()"
                 [number]="sensor.number"
                 [zone]="sensor.zone"
                 [value]="reading()?.soilMoisture?.[sensor.code] ?? null"
                 [quality]="reading()?.quality?.[sensor.code] ?? 'missing'"
                 [timestamp]="timestamp()"
                 [stale]="stale()"
+                [range]="thresholds.states()[sensor.code]"
+                [canEdit]="auth.user()?.role === 'ADMIN'"
+                (configure)="
+                  configureRange(sensor.code, 'Sensor ' + sensor.number + ' · Zona ' + sensor.zone)
+                "
               />
             }
           </div>
@@ -197,26 +230,34 @@
               <h3>Temperatura</h3>
               <strong
                 >{{
-                  reading()?.temperatureC === null || !reading()
+                  environmentAssessments().temperatureC.value === null
                     ? '—'
-                    : (reading()?.temperatureC | number: '1.0-1')
+                    : (environmentAssessments().temperatureC.value | number: '1.0-1')
                 }}<small> °C</small></strong
-              ><span>{{
-                reading()?.temperatureC === null || !reading() ? 'Sin datos' : 'Sin calibrar'
-              }}</span>
+              >
+              <app-sensor-assessment [assessment]="environmentAssessments().temperatureC" />
+              <app-sensor-range
+                [state]="thresholds.states().temperatureC"
+                [canEdit]="auth.user()?.role === 'ADMIN'"
+                (configure)="configureRange('temperatureC', 'Temperatura')"
+              />
             </div>
             <div>
               <span class="metric-icon" aria-hidden="true">♧</span>
               <h3>Humedad ambiental</h3>
               <strong
                 >{{
-                  reading()?.airHumidityPct === null || !reading()
+                  environmentAssessments().airHumidityPct.value === null
                     ? '—'
-                    : (reading()?.airHumidityPct | number: '1.0-1')
+                    : (environmentAssessments().airHumidityPct.value | number: '1.0-1')
                 }}<small> %</small></strong
-              ><span>{{
-                reading()?.airHumidityPct === null || !reading() ? 'Sin datos' : 'Sin calibrar'
-              }}</span>
+              >
+              <app-sensor-assessment [assessment]="environmentAssessments().airHumidityPct" />
+              <app-sensor-range
+                [state]="thresholds.states().airHumidityPct"
+                [canEdit]="auth.user()?.role === 'ADMIN'"
+                (configure)="configureRange('airHumidityPct', 'Humedad ambiental')"
+              />
             </div>
           </div>
           <p class="note">
@@ -291,6 +332,9 @@
           <app-soil-history-chart
             [readings]="telemetry.history().items"
             [intervalSeconds]="telemetry.snapshot()?.device?.expectedIntervalSeconds ?? 60"
+            [thresholds]="thresholdHistory.states()"
+            [source]="source()"
+            (retryThresholds)="thresholdHistory.reload()"
           />
           <div class="pagination">
             <button
@@ -313,12 +357,19 @@
             </button>
           </div>
         </section>
-        <app-dashboard-insights />
+        <app-dashboard-insights [selection]="alertSelection()" [sensors]="alertSensors()" />
       </div>
       <footer class="page-footer">
         CacaoSmart IoT · TerriTech CITIC 2026 · Hora local del navegador · El ESP32 conserva el
         control seguro del riego.
       </footer>
+      @if (editing(); as target) {
+        <app-sensor-range-editor
+          [target]="target"
+          (saved)="rangeSaved()"
+          (closed)="editing.set(null)"
+        />
+      }
     </main>
   </div>
 </div>

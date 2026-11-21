@@ -13,6 +13,9 @@ import { JwtAuthGuard, RolesGuard } from './auth/auth.guards';
 import { PlotsModule } from './plots/plots.module';
 import { DeviceAuthModule } from './devices/device-auth.module';
 import { IotIngestionModule } from './iot-ingestion/iot-ingestion.module';
+import { ThresholdModule } from './sensor-thresholds/threshold.module';
+import { OfflineAlertModule } from './alerts/offline-alert.module';
+import { MoistureModule } from './alerts/moisture/moisture.module';
 
 @Module({
   imports: [
@@ -29,6 +32,9 @@ import { IotIngestionModule } from './iot-ingestion/iot-ingestion.module';
     PlotsModule,
     DeviceAuthModule,
     IotIngestionModule,
+    ThresholdModule,
+    OfflineAlertModule,
+    MoistureModule,
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
   ],
   providers: [

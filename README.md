@@ -2,9 +2,15 @@
 
 Monitoreo y riego inteligente para cacao en Chone, Manabí, Ecuador. Proyecto TerriTech Hackathon CITIC 2026.
 
-## Estado actual: fase 4
+## Estado actual: fase 5.7 (baja humedad por sonda)
 
-Base ejecutable con **Angular + NestJS + PostgreSQL/Prisma**, registro, parcelas propias y **dashboard de telemetría en vivo** con tres zonas. La pantalla pública `/estado` comprueba salud real de API/PostgreSQL. IA, alertas y métricas hídricas siguen pendientes y se identifican como tales, sin resultados inventados.
+Base ejecutable con **Angular + NestJS + PostgreSQL/Prisma**, registro, parcelas propias y **dashboard de telemetría en vivo** con tres zonas. La pantalla pública `/estado` comprueba salud real de API/PostgreSQL. Hay alertas persistentes de desconexión y baja humedad por sonda; la migración de humedad fue verificada en bases temporales y aplicada localmente con autorización, preservando datos anteriores. IA y métricas hídricas siguen pendientes, sin resultados inventados.
+
+Fase 5: **rangos min/max por UUID de sensor**, con permisos por propietario, auditoría atómica y versión para ediciones concurrentes. ADMIN propietario puede editarlos desde «Configurar rango»; FARMER conserva solo lectura. Las tarjetas de A/B/C, temperatura y humedad ambiental comparan las lecturas recientes con su rango: **Bajo / En rango / Alto**, manteniendo calidad, antigüedad y real/DEMO por separado. Los extremos son inclusivos; sin configuración no se inventan límites. La comparación es numérica, no diagnóstico ni prueba de calibración. El gráfico de suelo añade mínimos/máximos **por vigencia**: cambiar hoy un rango no lo aplica al pasado. Ver [API de fase 5.1](docs/phase-5.md), [consulta de fase 5.2](docs/phase-5-2.md), [edición de fase 5.3](docs/phase-5-3.md), [clasificación de fase 5.4](docs/phase-5-4.md) y [límites históricos de fase 5.5](docs/phase-5-5.md).
+
+**Alertas de desconexión (5.6):** el backend detecta más de cinco intervalos sin mensajes, incluso sin navegador abierto. Guarda un episodio activo por dispositivo; ADMIN o FARMER propietario puede reconocerlo sin cerrar la condición. Un mensaje nuevo aceptado restablece contacto y conserva el historial. Sin contacto previo no se inventa desconexión. El panel separa real/DEMO, errores y reconocimiento; no abre válvulas ni evalúa humedad. Ver [fase 5.6](docs/phase-5-6.md).
+
+**Baja humedad (5.7):** tres lecturas consecutivas bajo el mínimo por A/B/C; recuperación con tres ≥ mínimo + margen positivo configurado, sin defaults. Datos inválidos/ausentes/antiguos rompen confirmaciones sin resolver; reales sin calibrar no cuentan. Cambio de rango/margen cierra por configuración, no recuperación. Panel/configuración ADMIN y reconocimiento propietario independientes del riego. **Migración aplicada localmente; configurar el margen de cada sonda explícitamente para habilitarla.** Ver [fase 5.7](docs/phase-5-7.md).
 
 - Angular standalone, Router, HttpClient y detección de cambios sin Zone.js.
 - API NestJS con entorno validado, CORS restringido, validación global y OpenAPI en desarrollo.
@@ -18,7 +24,7 @@ Base ejecutable con **Angular + NestJS + PostgreSQL/Prisma**, registro, parcelas
 - Tipos compartidos de telemetría y puertos para desacoplar fuentes demo/reales.
 - Pruebas de configuración, salud HTTP y presentación de disponibilidad.
 
-No hay análisis IA, predicción, motor de alertas ni control remoto de válvula implementados. El recorrido completo hasta Angular está probado con simulador, **no con ESP32 real**. Gestión de dispositivos y altas de agricultores disponibles mediante API, no mediante formularios Angular todavía. No desplegar esta base como producto terminado.
+No hay análisis IA, predicción ni control remoto de válvula implementados. El recorrido completo hasta Angular está probado con simulador, **no con ESP32 real**. Gestión de dispositivos y altas de agricultores disponibles mediante API, no mediante formularios Angular todavía. No desplegar esta base como producto terminado.
 
 ## Especificaciones
 
@@ -31,6 +37,13 @@ No hay análisis IA, predicción, motor de alertas ni control remoto de válvula
 - [Registro público de agricultores](docs/registration.md).
 - [Telemetría, simulador y resultados de fase 3](docs/phase-3.md).
 - [Dashboard, Socket.IO y pruebas de navegador de fase 4](docs/phase-4.md).
+- [Rangos por sensor, permisos y auditoría de fase 5.1](docs/phase-5.md).
+- [Consulta y presentación de rangos en Angular de fase 5.2](docs/phase-5-2.md).
+- [Edición visual de rangos para ADMIN propietario de fase 5.3](docs/phase-5-3.md).
+- [Clasificación de lecturas en tarjetas de fase 5.4](docs/phase-5-4.md).
+- [Límites históricos de A/B/C por vigencia de fase 5.5](docs/phase-5-5.md).
+- [Alertas persistentes de desconexión y reconocimiento de fase 5.6](docs/phase-5-6.md).
+- [Baja humedad por sonda, margen y reconocimiento de fase 5.7](docs/phase-5-7.md).
 - [Guía para colaboradores](CONTRIBUTING.md).
 - [Estado y siguiente tarea para retomar el desarrollo](docs/HANDOFF.md).
 
@@ -159,6 +172,8 @@ Para usar el simulador **de forma explícita**, sin crear cuentas ni alterar dis
 
 Detalles, límites, calidad e idempotencia en [fase 3](docs/phase-3.md). No se ha creado una demo automáticamente en la base principal.
 
+En modo continuo, el simulador espera y se reconecta si la API local se reinicia o devuelve 429/5xx, conservando el mismo evento para evitar duplicados. Los lotes con `--count` mantienen reintentos acotados. Errores de autenticación, payload rechazado u origen no DEMO siguen deteniendo la simulación; Ctrl+C cancela también la espera de recuperación.
+
 ## Salud del servicio
 
 | Endpoint                                  | Significado                                                                                    |
@@ -238,6 +253,6 @@ El paquete de contratos solo contiene tipos: la validación HTTP se hace en los 
 
 La auditoría de dependencias conserva avisos, registrados en [fase 1](docs/phase-1.md). No se aplicó `npm audit fix --force`, no se desactivó la auditoría y no se considera el proyecto listo para producción. Revisar dependencias antes de publicar o desplegar.
 
-Siguiente fase: rangos/alertas/eventos de riego/reportes. Después: diagnóstico IA y clima/predicción. Todo el alcance de DERCAS se conserva. Resolver explícitamente el flujo de asignación de parcelas a agricultores antes de usarlo en campo. Detalles de la fase actual y pruebas reales de navegador en [fase 4](docs/phase-4.md).
+La edición ADMIN, clasificación numérica, límites históricos por vigencia y alertas de desconexión/baja humedad están implementadas, con migraciones locales aplicadas. Falta configurar márgenes explícitos por sonda; no se inventan automáticamente. Cualquier incremento posterior requiere autorización; eventos de riego, reportes, diagnóstico IA y clima/predicción siguen pendientes. Todo el alcance de DERCAS se conserva. Resolver el flujo de asignación de parcelas antes de usarlo en campo. Ver [fase 5.7](docs/phase-5-7.md), [fase 5.6](docs/phase-5-6.md) y [histórico](docs/phase-5-5.md).
 
 El ESP32 mantiene el control local del riego. Sin calibración, caudal o línea base no se afirmarán litros, ahorro ni umbrales válidos. La IA será orientativa y nunca controlará la válvula.
