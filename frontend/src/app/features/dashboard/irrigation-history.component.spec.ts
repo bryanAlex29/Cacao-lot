@@ -21,6 +21,118 @@ describe('Historial observado de riego', () => {
     };
   }
   afterEach(() => TestBed.resetTestingModule());
+  it('aplica fechas locales como UTC y mantiene límites al paginar, actualizar y reconectar', async () => {
+    const { fixture, component, http } = await setup();
+    component.form.setValue({ from: '2026-11-20T00:00:00', to: '2026-11-21T23:59:59' });
+    component.applyDates();
+    const expected = {
+      from: new Date('2026-11-20T00:00:00').toISOString(),
+      to: new Date('2026-11-21T23:59:59').toISOString(),
+    };
+    const check = (offset: number) => {
+      const req = http.expectOne((r) => r.url.endsWith('/irrigation-events'));
+      expect(req.request.params.get('from')).toBe(expected.from);
+      expect(req.request.params.get('to')).toBe(expected.to);
+      expect(req.request.params.get('offset')).toBe(String(offset));
+      req.flush({ items: [], total: 11, limit: 10, offset });
+    };
+    check(0);
+    component.load(10);
+    check(10);
+    component.refresh();
+    check(0);
+    fixture.componentRef.setInput('refreshRevision', 1);
+    fixture.detectChanges();
+    check(0);
+    expect(component.period()).toEqual(expected);
+    expect(fixture.nativeElement.textContent).toContain('Periodo fijo');
+    http.verify();
+  });
+  it.each([
+    { from: '', to: '' },
+    { from: '2026-11-22T00:00:00', to: '2026-11-20T00:00:00' },
+    { from: '2026-10-01T00:00:00', to: '2026-11-02T00:00:00' },
+    { from: '2026-02-30T00:00:00', to: '2026-03-01T00:00:00' },
+  ])(
+    'rechaza fechas inválidas sin consultas ni sustituir el periodo aplicado: %o',
+    async (dates) => {
+      const { component, http } = await setup();
+      component.form.setValue({ from: '2026-11-20T00:00:00', to: '2026-11-21T00:00:00' });
+      component.applyDates();
+      http
+        .expectOne((r) => r.url.endsWith('/irrigation-events'))
+        .flush({ items: [], total: 0, limit: 10, offset: 0 });
+      const period = component.period();
+      component.form.setValue(dates);
+      component.applyDates();
+      expect(component.periodError()).toContain('máximo 31 días');
+      expect(component.period()).toEqual(period);
+      expect(component.checkedAt()).not.toBeNull();
+      http.expectNone((r) => r.url.endsWith('/irrigation-events'));
+      http.verify();
+    },
+  );
+  it('admite límites iguales y exactamente 31 días; preset abandona el periodo fijo', async () => {
+    const { component, http } = await setup();
+    for (const to of ['2026-10-01T00:00:00', '2026-11-01T00:00:00']) {
+      component.form.setValue({ from: '2026-10-01T00:00:00', to });
+      component.applyDates();
+      http
+        .expectOne((r) => r.url.endsWith('/irrigation-events'))
+        .flush({ items: [], total: 0, limit: 10, offset: 0 });
+      expect(component.periodError()).toBe('');
+    }
+    component.setDays(7);
+    expect(component.period()).toBeNull();
+    const req = http.expectOne((r) => r.url.endsWith('/irrigation-events'));
+    expect(
+      Date.parse(req.request.params.get('to')!) - Date.parse(req.request.params.get('from')!),
+    ).toBe(7 * 86400000);
+    req.flush({ items: [], total: 0, limit: 10, offset: 0 });
+    http.verify();
+  });
+  it.each([
+    { ...selection, deviceId: 'other' },
+    { ...selection, plotId: 'other' },
+    { ...selection, source: 'real' },
+    null,
+  ])('cancela periodo fijo al cambiar selección y espera consulta manual: %o', async (next) => {
+    const { fixture, component, http } = await setup();
+    component.setDays(30);
+    http
+      .expectOne((r) => r.url.endsWith('/irrigation-events'))
+      .flush({ items: [], total: 0, limit: 10, offset: 0 });
+    component.form.setValue({ from: '2026-11-20T00:00:00', to: '2026-11-21T00:00:00' });
+    component.applyDates();
+    const pending = http.expectOne((r) => r.url.endsWith('/irrigation-events'));
+    fixture.componentRef.setInput('selection', next);
+    fixture.componentRef.setInput('refreshRevision', 10);
+    fixture.detectChanges();
+    expect(pending.cancelled).toBe(true);
+    expect(component.period()).toBeNull();
+    expect(component.days()).toBe(1);
+    expect(component.checkedAt()).toBeNull();
+    expect(component.busy()).toBe(false);
+    http.expectNone((r) => r.url.endsWith('/irrigation-events'));
+    http.verify();
+  });
+  it('reintenta fallos conservando el periodo fijo y cancela al aplicar nuevas fechas', async () => {
+    const { component, http } = await setup();
+    component.form.setValue({ from: '2026-11-20T00:00:00', to: '2026-11-21T00:00:00' });
+    component.applyDates();
+    const old = http.expectOne((r) => r.url.endsWith('/irrigation-events'));
+    component.form.controls.to.setValue('2026-11-22T00:00:00');
+    component.applyDates();
+    expect(old.cancelled).toBe(true);
+    http
+      .expectOne((r) => r.url.endsWith('/irrigation-events'))
+      .flush({}, { status: 503, statusText: 'Unavailable' });
+    component.refresh();
+    const retry = http.expectOne((r) => r.url.endsWith('/irrigation-events'));
+    expect(retry.request.params.get('to')).toBe(new Date('2026-11-22T00:00:00').toISOString());
+    retry.flush({ items: [], total: 0, limit: 10, offset: 0 });
+    http.verify();
+  });
   it('consulta solo a petición, muestra DEMO y no habilita control remoto', async () => {
     const { fixture, http } = await setup();
     http.expectNone(() => true);

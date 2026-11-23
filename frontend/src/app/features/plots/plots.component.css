@@ -127,6 +127,11 @@ button.secondary {
   background: white;
   border-color: #9cb5a3;
 }
+.inventory-toggle {
+  display: block;
+  margin-top: 16px;
+  max-width: 100%;
+}
 button:disabled {
   opacity: 0.55;
   cursor: not-allowed;

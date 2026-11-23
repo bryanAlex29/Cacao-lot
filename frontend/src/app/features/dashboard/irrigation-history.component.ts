@@ -1,8 +1,14 @@
 import { Component, DestroyRef, effect, inject, input, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import type { ObservedIrrigationEvent, Page, TelemetrySubscription } from '@cacaosmart/contracts';
 import { IrrigationApi } from '../../core/irrigation/irrigation-api.service';
+import {
+  HistoryPeriod,
+  historyPeriodFromLocal,
+  localDateTime,
+} from '../../core/telemetry/history-period';
 
 const emptyPage = (): Page<ObservedIrrigationEvent> => ({
   items: [],
@@ -14,7 +20,7 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
 @Component({
   selector: 'app-irrigation-history',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, ReactiveFormsModule],
   template: `<section
     tabindex="-1"
     id="irrigation-history"
@@ -34,7 +40,11 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
     } @else {
       <div class="controls">
         @for (value of [1, 7, 30]; track value) {
-          <button type="button" [attr.aria-pressed]="days() === value" (click)="setDays(value)">
+          <button
+            type="button"
+            [attr.aria-pressed]="!period() && days() === value"
+            (click)="setDays(value)"
+          >
             {{ value === 1 ? '24 h' : value + ' días' }}
           </button>
         }
@@ -42,6 +52,41 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
           Consultar / actualizar historial
         </button>
       </div>
+      <form
+        [formGroup]="form"
+        (ngSubmit)="applyDates()"
+        aria-label="Fechas del riego observado"
+        novalidate
+      >
+        <label
+          >Desde del riego (hora local)<input
+            type="datetime-local"
+            step="1"
+            formControlName="from"
+            required
+        /></label>
+        <label
+          >Hasta del riego (hora local)<input
+            type="datetime-local"
+            step="1"
+            formControlName="to"
+            required
+        /></label>
+        <button type="submit">Aplicar fechas al riego</button>
+      </form>
+      @if (periodError()) {
+        <p role="alert">{{ periodError() }}</p>
+      }
+      <p role="status">
+        @if (period(); as selected) {
+          Periodo fijo: {{ selected.from | date: 'dd/MM/yyyy HH:mm:ss' }} —
+          {{ selected.to | date: 'dd/MM/yyyy HH:mm:ss' }}.
+        } @else {
+          Periodo móvil: {{ days() === 1 ? 'últimas 24 h' : 'últimos ' + days() + ' días' }}.
+        }
+        Hora local del navegador ({{ timezone }}). Máximo 31 días. Solo filtra el riego observado;
+        gráfico y reportes tienen filtros independientes.
+      </p>
       @if (busy()) {
         <p role="status">Consultando historial…</p>
       } @else if (error()) {
@@ -175,6 +220,29 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
         align-items: center;
         gap: 8px;
       }
+      form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      label {
+        font-size: 12px;
+        min-width: 0;
+      }
+      input {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 44px;
+        padding: 8px;
+        border: 1px solid #a9c7ae;
+        border-radius: 8px;
+      }
+      [role='alert'] {
+        color: #8b2020;
+      }
       button {
         background: white;
         border: 1px solid #a9c7ae;
@@ -193,6 +261,7 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
         cursor: default;
       }
       button:focus-visible,
+      input:focus-visible,
       .table-scroll:focus-visible {
         outline: 3px solid #1263bd;
         outline-offset: 2px;
@@ -234,6 +303,13 @@ export class IrrigationHistoryComponent {
   private from = '';
   private to = '';
   readonly days = signal(1);
+  readonly period = signal<HistoryPeriod | null>(null);
+  readonly periodError = signal('');
+  readonly timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  readonly form = inject(FormBuilder).nonNullable.group({
+    from: ['', Validators.required],
+    to: ['', Validators.required],
+  });
   readonly busy = signal(false);
   readonly error = signal('');
   readonly checkedAt = signal<string | null>(null);
@@ -242,7 +318,7 @@ export class IrrigationHistoryComponent {
   constructor() {
     effect(() => {
       this.selection();
-      this.reset();
+      untracked(() => this.reset());
     });
     effect(() => {
       this.refreshRevision();
@@ -254,6 +330,12 @@ export class IrrigationHistoryComponent {
   }
 
   private reset(): void {
+    this.days.set(1);
+    this.period.set(null);
+    this.periodError.set('');
+    this.fillDates(1);
+    this.from = '';
+    this.to = '';
     this.activated = false;
     this.request.unsubscribe();
     this.page.set(emptyPage());
@@ -262,18 +344,43 @@ export class IrrigationHistoryComponent {
     this.checkedAt.set(null);
   }
   setDays(days: number): void {
-    if (![1, 7, 30].includes(days)) return;
+    if (!this.selection() || ![1, 7, 30].includes(days)) return;
     this.days.set(days);
+    this.period.set(null);
+    this.periodError.set('');
+    this.fillDates(days);
+    this.refresh();
+  }
+  private fillDates(days: number): void {
+    const end = new Date(Math.ceil(Date.now() / 1000) * 1000);
+    this.form.setValue({
+      from: localDateTime(new Date(end.getTime() - days * 86400000)),
+      to: localDateTime(end),
+    });
+  }
+  applyDates(): void {
+    if (!this.selection()) return;
+    const { from, to } = this.form.getRawValue();
+    const period = historyPeriodFromLocal(from, to);
+    if (this.form.invalid || !period) {
+      this.periodError.set('Indica fechas válidas, ordenadas y un periodo de máximo 31 días.');
+      return;
+    }
+    this.periodError.set('');
+    this.period.set(period);
     this.refresh();
   }
   refresh(): void {
-    this.to = new Date().toISOString();
-    this.from = new Date(Date.parse(this.to) - this.days() * 86400000).toISOString();
+    if (!this.selection()) return;
+    const period = this.period();
+    this.to = period?.to ?? new Date().toISOString();
+    this.from =
+      period?.from ?? new Date(Date.parse(this.to) - this.days() * 86400000).toISOString();
     this.load(0);
   }
   load(offset: number): void {
     const selection = this.selection();
-    if (!selection || offset < 0) return;
+    if (!selection || offset < 0 || !this.from || !this.to) return;
     this.activated = true;
     this.request.unsubscribe();
     this.busy.set(true);

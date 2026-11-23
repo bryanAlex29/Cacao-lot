@@ -110,6 +110,22 @@
                   {{ plot.areaM2 === null ? 'No registrada' : (plot.areaM2 | number) + ' m²' }}
                 </p>
                 <a [routerLink]="['/parcelas', plot.id, 'dashboard']">Abrir panel de monitoreo →</a>
+                <button
+                  type="button"
+                  class="secondary inventory-toggle"
+                  [attr.aria-expanded]="inventoryPlotId() === plot.id"
+                  [attr.aria-controls]="'inventory-' + plot.id"
+                  (click)="inventoryPlotId.set(inventoryPlotId() === plot.id ? null : plot.id)"
+                >
+                  {{
+                    inventoryPlotId() === plot.id
+                      ? 'Ocultar dispositivos y sensores'
+                      : 'Ver dispositivos y sensores'
+                  }}
+                </button>
+                @if (inventoryPlotId() === plot.id) {
+                  <app-device-inventory [id]="'inventory-' + plot.id" [plotId]="plot.id" />
+                }
               </article>
             }
           </div>
@@ -135,8 +151,9 @@
         </div>
       </section>
       <p class="note">
-        Dispositivos y sensores se gestionan por ahora mediante la API documentada. No hay controles
-        de válvula, diagnósticos ni cálculos de ahorro en esta vista.
+        Puedes consultar dispositivos y sensores de tus parcelas. Su alta y habilitación siguen
+        mediante la API autorizada; no se cambian asignaciones desde esta vista. No hay controles de
+        válvula, diagnósticos ni cálculos de ahorro.
       </p>
     </main>
   </div>

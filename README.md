@@ -2,7 +2,9 @@
 
 Monitoreo y riego inteligente para cacao en Chone, Manabí, Ecuador. Proyecto TerriTech Hackathon CITIC 2026.
 
-## Estado actual: fase 5.12 (fechas personalizadas del histórico)
+## Estado actual: fase 5.14 (inventario de dispositivos y sensores)
+
+**Últimos incrementos:** fechas Desde/Hasta del riego observado (5.13, máximo 31 días y periodo fijo) e inventario de solo lectura en **Mis parcelas → Ver dispositivos y sensores** (5.14, paginado, REAL/DEMO, último contacto y sensores). Sin nuevas migraciones ni dependencias respecto a `3ba7bf4`. Ver [fase 5.13](docs/phase-5-13.md), [fase 5.14](docs/phase-5-14.md) y [guía para continuar](docs/CONTINUAR.md).
 
 **Corrección de sesión:** ya no se expulsa al usuario al vencer el primer JWT de 15 minutos. Renovación automática mediante cookie HttpOnly y sesión revocable, máximo absoluto 8 horas; también recupera una recarga. **Iniciar sesión una vez tras actualizar** para activar la cookie nueva. Ver [seguridad, límites y prueba manual](docs/session-renewal.md).
 

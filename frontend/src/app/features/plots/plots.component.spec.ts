@@ -91,4 +91,56 @@ describe('Parcelas propias', () => {
     expect(component.error()).not.toBe('');
     http.verify();
   });
+  it.each(['ADMIN', 'FARMER'] as const)(
+    'abre/cierra inventario de %s sin navegar, escribir ni consultar otras parcelas',
+    async (role) => {
+      const { fixture, component, http } = await create(role);
+      component.plots.set([
+        {
+          id: 'plot',
+          ownerId: 'owner',
+          name: 'Mi parcela',
+          locationLabel: 'Chone',
+          areaM2: null,
+          createdAt: '2026-11-23T00:00:00.000Z',
+        },
+      ]);
+      fixture.detectChanges();
+      http.expectNone((r) => r.url.endsWith('/devices'));
+      const toggle = fixture.nativeElement.querySelector('.inventory-toggle') as HTMLButtonElement;
+      toggle.click();
+      fixture.detectChanges();
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      const req = http.expectOne('/api/v1/plots/plot/devices?limit=10&offset=0');
+      toggle.click();
+      fixture.detectChanges();
+      expect(req.cancelled).toBe(true);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(fixture.nativeElement.querySelector('app-device-inventory')).toBeNull();
+      http.verify();
+    },
+  );
+  it('actualizar parcelas cierra inventario y cancela su consulta', async () => {
+    const { fixture, component, http } = await create('FARMER');
+    component.plots.set([
+      {
+        id: 'plot',
+        ownerId: 'owner',
+        name: 'Mi parcela',
+        locationLabel: 'Chone',
+        areaM2: null,
+        createdAt: '2026-11-23T00:00:00.000Z',
+      },
+    ]);
+    component.inventoryPlotId.set('plot');
+    fixture.detectChanges();
+    const pending = http.expectOne('/api/v1/plots/plot/devices?limit=10&offset=0');
+    component.load(0);
+    fixture.detectChanges();
+    expect(pending.cancelled).toBe(true);
+    http
+      .expectOne('/api/v1/plots?limit=20&offset=0')
+      .flush({ items: [], total: 0, limit: 20, offset: 0 });
+    http.verify();
+  });
 });

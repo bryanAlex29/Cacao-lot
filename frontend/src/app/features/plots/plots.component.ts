@@ -6,11 +6,12 @@ import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { Page, PlotSummary } from '@cacaosmart/contracts';
 import { AuthService } from '../../core/auth/auth.service';
+import { DeviceInventoryComponent } from './device-inventory.component';
 
 @Component({
   selector: 'app-plots',
   standalone: true,
-  imports: [ReactiveFormsModule, DecimalPipe, RouterLink],
+  imports: [ReactiveFormsModule, DecimalPipe, RouterLink, DeviceInventoryComponent],
   templateUrl: './plots.component.html',
   styleUrl: './plots.component.css',
 })
@@ -30,6 +31,7 @@ export class PlotsComponent implements OnInit {
   readonly saving = signal(false);
   readonly error = signal('');
   readonly message = signal('');
+  readonly inventoryPlotId = signal<string | null>(null);
   readonly form = inject(FormBuilder).nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(100)]],
     locationLabel: ['', [Validators.required, Validators.maxLength(200)]],
@@ -51,6 +53,7 @@ export class PlotsComponent implements OnInit {
 
   load(offset: number): void {
     if (this.busy()) return;
+    this.inventoryPlotId.set(null);
     this.busy.set(true);
     this.error.set('');
     this.http

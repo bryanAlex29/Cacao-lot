@@ -1353,6 +1353,146 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await chart.locator('svg').waitFor();
   });
 
+  it('fechas del riego observado conservan UTC al paginar/actualizar y validan sin afectar gráfico o móvil', async () => {
+    const db = app.get(PrismaService);
+    // Only the disposable test DB: many readings do not necessarily imply many relay changes.
+    const base = Date.now() - 6 * 3600000;
+    await db.reading.createMany({
+      data: Array.from({ length: 12 }, (_, i) => ({
+        deviceId: adminDeviceId,
+        eventId: `irrigation-custom-period-${i}`,
+        source: 'demo' as const,
+        recordedAt: new Date(base + i * 5000),
+        effectiveAt: new Date(base + i * 5000),
+        receivedAt: new Date(),
+        timestampOrigin: 'device',
+        payloadHash: '0'.repeat(64),
+        relayCommandedOpen: i % 2 === 0,
+        quality: {
+          soil_1: 'missing',
+          soil_2: 'missing',
+          soil_3: 'missing',
+          temperatureC: 'missing',
+          airHumidityPct: 'missing',
+          rainDetected: 'missing',
+          relayCommandedOpen: 'valid',
+          feedbackOpen: 'missing',
+        },
+      })),
+    });
+    const bounds = await db.reading.aggregate({
+      where: { deviceId: adminDeviceId },
+      _min: { effectiveAt: true },
+      _max: { effectiveAt: true },
+    });
+    const from = new Date(
+      Math.floor(bounds._min.effectiveAt!.getTime() / 1000) * 1000 - 1000,
+    ).toISOString();
+    const to = new Date(
+      Math.ceil(bounds._max.effectiveAt!.getTime() / 1000) * 1000 + 1000,
+    ).toISOString();
+    const panel = adminPage.locator('app-irrigation-history');
+    const form = panel.getByRole('form', { name: 'Fechas del riego observado', exact: true });
+    const setFields = async (start: string, end: string) => {
+      const local = (iso: string) =>
+        adminPage.evaluate((value) => {
+          const date = new Date(value);
+          return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 19)
+            .replace(/:00$/, '');
+        }, iso);
+      await form
+        .getByLabel('Desde del riego (hora local)', { exact: true })
+        .fill(await local(start));
+      await form.getByLabel('Hasta del riego (hora local)', { exact: true }).fill(await local(end));
+    };
+    const response = (offset: number, start = from, end = to, status = 200) =>
+      adminPage.waitForResponse((r) => {
+        const url = new URL(r.url());
+        return (
+          url.pathname.endsWith('/irrigation-events') &&
+          url.searchParams.get('from') === start &&
+          url.searchParams.get('to') === end &&
+          url.searchParams.get('offset') === String(offset) &&
+          r.status() === status
+        );
+      });
+    const graphDates = await adminPage
+      .locator('app-history-period input')
+      .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
+    await setFields(from, to);
+    const first = response(0);
+    await form.getByRole('button', { name: 'Aplicar fechas al riego', exact: true }).click();
+    const received = await first;
+    expect(new URL(received.url()).searchParams.get('source')).toBe('demo');
+    expect(new URL(received.url()).searchParams.get('deviceId')).toBe(adminDeviceId);
+    expect((await received.json()).total).toBeGreaterThan(10);
+    await panel.getByText('Periodo fijo:', { exact: false }).waitFor();
+    const second = response(10);
+    await panel.getByRole('button', { name: 'Más antiguos', exact: true }).click();
+    await second;
+    const refreshed = response(0);
+    await panel
+      .getByRole('button', { name: 'Consultar / actualizar historial', exact: true })
+      .click();
+    await refreshed;
+    expect(
+      await adminPage
+        .locator('app-history-period input')
+        .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)),
+    ).toEqual(graphDates);
+    await setFields('2026-01-01T00:00:00.000Z', '2026-03-01T00:00:00.000Z');
+    await form.getByRole('button', { name: 'Aplicar fechas al riego', exact: true }).click();
+    await panel.getByRole('alert').waitFor();
+    const emptyFrom = '2020-01-01T00:00:00.000Z',
+      emptyTo = '2020-01-02T00:00:00.000Z';
+    await setFields(emptyFrom, emptyTo);
+    const empty = response(0, emptyFrom, emptyTo);
+    await form.getByRole('button', { name: 'Aplicar fechas al riego', exact: true }).click();
+    await empty;
+    await panel.getByText('Sin cambios observados en este periodo.', { exact: false }).waitFor();
+    const fail = '**/api/v1/plots/*/irrigation-events?*';
+    await adminPage.route(fail, (route) =>
+      route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+    );
+    try {
+      const failed = response(0, emptyFrom, emptyTo, 503);
+      await panel
+        .getByRole('button', { name: 'Consultar / actualizar historial', exact: true })
+        .click();
+      await failed;
+      await panel.getByText('No se pudo consultar el historial.', { exact: false }).waitFor();
+    } finally {
+      await adminPage.unroute(fail);
+    }
+    const retry = response(0, emptyFrom, emptyTo);
+    await panel.getByRole('button', { name: 'Reintentar', exact: true }).click();
+    await retry;
+    expect(
+      await adminPage
+        .locator('app-history-period input')
+        .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)),
+    ).toEqual(graphDates);
+    expect(await adminPage.getByRole('button', { name: 'Salir', exact: true }).count()).toBe(1);
+    await adminPage.setViewportSize({ width: 390, height: 844 });
+    expect(await adminPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await adminPage.screenshot({
+      path: join(directory, 'irrigation-period-mobile.png'),
+      fullPage: true,
+    });
+    const preset = adminPage.waitForResponse(
+      (r) => r.url().includes('/irrigation-events?') && r.status() === 200,
+    );
+    await panel.getByRole('button', { name: '24 h', exact: true }).click();
+    await preset;
+    expect(
+      await panel.getByRole('button', { name: '24 h', exact: true }).getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
   it('renueva antes de quince minutos, reautentica Socket.IO, recupera recarga y revoca al salir', async () => {
     const context = await browser.newContext();
     const sessionPage = await context.newPage();
@@ -1381,6 +1521,11 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       await sessionPage.clock.fastForward(840000);
       await refreshed;
       await reconnected;
+      // Wait for Socket.IO authentication/subscription, not just the transport opening,
+      // before advancing across its ping timeout with the controlled browser clock.
+      await sessionPage.waitForFunction(() =>
+        document.querySelector('main')?.textContent?.includes('Canal en vivo: Conectado'),
+      );
       await sessionPage.clock.fastForward(61000);
       await sessionPage.waitForFunction(() =>
         document.querySelector('main')?.textContent?.includes('Canal en vivo: Conectado'),
@@ -1409,6 +1554,101 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       await context.close();
     }
   }, 45000);
+
+  it.each([
+    {
+      email: 'browser@example.test',
+      plot: 'Cacao · Prueba aislada',
+      serial: 'browser-demo',
+      id: () => deviceId,
+    },
+    {
+      email: 'range-editor@example.test',
+      plot: 'Rangos · Prueba aislada',
+      serial: 'browser-editor-demo',
+      id: () => adminDeviceId,
+    },
+  ])(
+    'inventario de $email muestra equipos/sensores propios sin escrituras y recupera errores en móvil',
+    async (account) => {
+      const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const inventoryPage = await context.newPage();
+      try {
+        await inventoryPage.goto(`${frontendUrl}/login`);
+        await inventoryPage.locator('#email').fill(account.email);
+        await inventoryPage.locator('#password').fill(password);
+        await inventoryPage.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
+        await inventoryPage.getByRole('heading', { name: 'Mis parcelas', exact: true }).waitFor();
+        const mutations: string[] = [];
+        inventoryPage.on('request', (req) => {
+          if (req.url().includes('/api/v1/') && req.method() !== 'GET')
+            mutations.push(req.method());
+        });
+        const card = inventoryPage
+          .locator('article')
+          .filter({ has: inventoryPage.getByRole('heading', { name: account.plot, exact: true }) });
+        const toggle = card.getByRole('button', {
+          name: 'Ver dispositivos y sensores',
+          exact: true,
+        });
+        const received = inventoryPage.waitForResponse(
+          (r) => new URL(r.url()).pathname.endsWith('/devices') && r.status() === 200,
+        );
+        await toggle.click();
+        const body = await (await received).json();
+        expect(body.items.some((item: { id: string }) => item.id === account.id())).toBe(true);
+        expect(JSON.stringify(body)).not.toMatch(/deviceKey|credentialHash/);
+        const panel = card.locator('app-device-inventory');
+        await panel.getByRole('heading', { name: account.serial, exact: true }).waitFor();
+        await panel.getByText('DEMO · Equipo de demostración', { exact: true }).waitFor();
+        await panel.locator('summary').click();
+        expect(await panel.locator('.sensor').count()).toBe(6);
+        for (const label of [
+          'Sensor 1',
+          'Sensor 2',
+          'Sensor 3',
+          'Temperatura ambiental',
+          'Humedad ambiental',
+          'Detección de lluvia',
+        ]) {
+          expect(await panel.textContent()).toContain(label);
+        }
+        expect(await panel.locator('form').count()).toBe(0);
+        const fail = '**/api/v1/plots/*/devices?*';
+        await inventoryPage.route(fail, (route) =>
+          route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+        );
+        await panel.getByRole('button', { name: 'Actualizar dispositivos', exact: true }).click();
+        await panel.getByRole('alert').waitFor();
+        expect(await panel.locator('.device').count()).toBe(0);
+        await inventoryPage.unroute(fail);
+        const retry = inventoryPage.waitForResponse(
+          (r) => new URL(r.url()).pathname.endsWith('/devices') && r.status() === 200,
+        );
+        await panel.getByRole('button', { name: 'Reintentar dispositivos', exact: true }).click();
+        await retry;
+        await panel.getByRole('heading', { name: account.serial, exact: true }).waitFor();
+        expect(
+          await inventoryPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+        expect(
+          await inventoryPage.getByRole('heading', { name: 'Mis parcelas', exact: true }).count(),
+        ).toBe(1);
+        expect(mutations).toEqual([]);
+        await inventoryPage.screenshot({
+          path: join(directory, `inventory-${account.serial}-mobile.png`),
+          fullPage: true,
+        });
+        await card
+          .getByRole('button', { name: 'Ocultar dispositivos y sensores', exact: true })
+          .click();
+        await card.locator('app-device-inventory').waitFor({ state: 'detached' });
+        expect(await card.locator('app-device-inventory').count()).toBe(0);
+      } finally {
+        await context.close();
+      }
+    },
+  );
 
   it('FARMER crea parcela propia desde móvil sin dispositivos ni datos inventados', async () => {
     await page.getByRole('link', { name: 'Parcelas', exact: true }).click();
