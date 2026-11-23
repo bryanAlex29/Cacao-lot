@@ -24,14 +24,14 @@ CacaoSmart IoT es una solución de monitoreo y riego automatizado para cacao. Un
 
 ## 4. Roles
 - **Administrador:** configura parcelas, dispositivos, usuarios y umbrales.
-- **Agricultor:** consulta sus parcelas, telemetría, historial, alertas y reportes.
+- **Agricultor:** crea parcelas propias y consulta sus parcelas, telemetría, historial, alertas y reportes. Alta propia autorizada por el usuario el 2026-11-22; no amplía permisos de edición/archivo, dispositivos ni umbrales.
 - **Dispositivo:** envía telemetría y eventos autenticados; no tiene permisos de usuario humano.
 
 ## 5. Requisitos funcionales
 | ID | Requisito | Prioridad | Aceptación |
 |---|---|---|---|
 | RF-01 | Autenticación y autorización por roles | Alta | Acceso restringido a recursos propios |
-| RF-02 | Registrar y gestionar parcelas | Alta | CRUD con validación y propietario |
+| RF-02 | Registrar y gestionar parcelas | Alta | ADMIN y FARMER crean parcelas propias con validación y propietario derivado de sesión; edición/archivo permanecen ADMIN propietario. No admite ownerId del cliente ni asigna dispositivos/lecturas automáticamente |
 | RF-03 | Registrar ESP32 y asociarlo a parcela | Alta | Identificador único y credenciales independientes |
 | RF-04 | Recibir las tres humedades de suelo identificadas por zona, temperatura, humedad ambiental y lluvia | Alta | Payload válido persistido con hora y dispositivo |
 | RF-05 | Mostrar panel con últimas mediciones y fecha de actualización | Alta | Distingue datos recientes y desconexión |
@@ -127,6 +127,7 @@ El servidor valida rangos, timestamps, autenticación y asociación del disposit
 ## 11. Requisitos no funcionales
 - Política vigente para contraseñas nuevas: mínimo **8** y máximo **128** caracteres, al menos una mayúscula y un símbolo o signo de puntuación. Aplicar en registro, alta administrativa y bootstrap; espacios y dígitos no sustituyen el símbolo. No imponer dígitos ni minúsculas adicionales. El login de cuentas existentes sigue verificando su hash sin aplicar retroactivamente la nueva composición.
 - HTTPS/TLS, contraseñas con Argon2/bcrypt, tokens de duración limitada, validación de entrada, rate limiting, CORS restringido y secretos fuera de Git.
+- Corrección posterior a 5.12 solicitada por cierre de sesión: JWT de hasta 15 minutos renovables mediante cookie HttpOnly/Strict (Secure con HTTPS en producción), sesión absoluta de hasta 8 horas y revocación al salir. Revalidar actividad/rol/propiedad; no guardar contraseñas ni tokens en almacenamiento JavaScript. Detalles y límites en [renovación de sesión](../docs/session-renewal.md).
 - Autorización por propietario/parcela en **cada** endpoint.
 - Respaldo periódico de PostgreSQL y procedimiento de restauración probado.
 - Logging estructurado sin contraseñas ni secretos.

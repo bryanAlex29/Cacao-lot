@@ -10,6 +10,7 @@ import {
   Subscription,
   switchMap,
   tap,
+  takeUntil,
 } from 'rxjs';
 import type {
   ConnectionStatus,
@@ -19,6 +20,9 @@ import type {
   TelemetrySubscription,
 } from '@cacaosmart/contracts';
 import { ApiTelemetryDataSource, DemoTelemetryDataSource } from './api-telemetry-data-source';
+import { matchesIrrigationEvent } from '../irrigation/irrigation-event';
+import { matchesSensorStatus } from './sensor-status-event';
+import { HistoryPeriod, validHistoryPeriod } from './history-period';
 
 @Injectable()
 export class TelemetryFacade {
@@ -26,6 +30,7 @@ export class TelemetryFacade {
   private readonly demo = inject(DemoTelemetryDataSource);
   private scope = new Subscription();
   private refresh = new Subject<void>();
+  private readonly cancelRequests = new Subject<void>();
   private readonly now = signal(Date.now());
   readonly snapshot = signal<TelemetrySnapshot | null>(null);
   readonly history = signal<Page<TelemetryReading>>({ items: [], total: 0, limit: 100, offset: 0 });
@@ -33,6 +38,11 @@ export class TelemetryFacade {
   readonly error = signal('');
   readonly stream = signal<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   readonly days = signal(1);
+  readonly period = signal<HistoryPeriod | null>(null);
+  readonly irrigationRefresh = signal(0);
+  readonly sensorRefresh = signal(0);
+  private lastSensorSignature?: string;
+  private lastIrrigationId?: string;
   readonly offset = signal(0);
   readonly readingStale = computed(() => {
     const snapshot = this.snapshot();
@@ -68,12 +78,20 @@ export class TelemetryFacade {
     this.scope.unsubscribe();
     this.scope = new Subscription();
     this.selection = undefined;
+    this.lastIrrigationId = undefined;
+    this.irrigationRefresh.set(0);
+    this.sensorRefresh.set(0);
+    this.lastSensorSignature = undefined;
     this.snapshot.set(null);
+    this.period.set(null);
+    this.days.set(1);
     this.history.set({ items: [], total: 0, limit: 100, offset: 0 });
     this.busy.set(false);
   }
-  select(selection: TelemetrySubscription): void {
+  select(selection: TelemetrySubscription, period: HistoryPeriod | null = null, days = 1): void {
     this.stop();
+    this.period.set(period);
+    this.days.set(days);
     this.selection = { ...selection };
     this.offset.set(0);
     this.error.set('');
@@ -88,12 +106,15 @@ export class TelemetryFacade {
           auditTime(100),
           tap(() => this.busy.set(true)),
           switchMap(() => {
-            const to = new Date().toISOString();
-            const from = new Date(Date.now() - this.days() * 86400000).toISOString();
+            const fixed = this.period();
+            const to = fixed?.to ?? new Date().toISOString();
+            const from =
+              fixed?.from ?? new Date(Date.parse(to) - this.days() * 86400000).toISOString();
             return forkJoin({
               snapshot: source.snapshot(selection),
               history: source.history(selection, from, to, this.offset()),
             }).pipe(
+              takeUntil(this.cancelRequests),
               catchError(() => {
                 this.error.set(
                   'No se pudieron recuperar las mediciones. Revisa tu sesión y conexión; no se sustituyen por datos simulados.',
@@ -116,13 +137,32 @@ export class TelemetryFacade {
     this.scope.add(
       source.updates(selection).subscribe((event) => {
         if (event.kind === 'connected') {
+          this.irrigationRefresh.update((value) => value + 1);
           this.stream.set('connected');
           this.reload();
         } else if (event.kind === 'error' || event.kind === 'disconnected')
           this.stream.set(event.kind);
         else if (event.kind === 'reading')
           this.reload(); // REST decide el último con desempate de servidor.
-        else if (event.kind === 'status') {
+        else if (event.kind === 'irrigation') {
+          if (
+            matchesIrrigationEvent(event.event, selection) &&
+            event.event.observation.id !== this.lastIrrigationId
+          ) {
+            this.lastIrrigationId = event.event.observation.id;
+            this.irrigationRefresh.update((value) => value + 1);
+            this.reload(); // Invalidation only: REST remains authoritative for ordering.
+          }
+        } else if (event.kind === 'sensor') {
+          if (matchesSensorStatus(event.event, selection)) {
+            const signature = JSON.stringify(event.event.sensors);
+            if (signature !== this.lastSensorSignature) {
+              this.lastSensorSignature = signature;
+              this.sensorRefresh.update((value) => value + 1);
+              this.reload(); // Derived health invalidates REST; never overwrite newer measurements.
+            }
+          }
+        } else if (event.kind === 'status') {
           const snapshot = this.snapshot();
           const device = snapshot?.device;
           // Estado de conexión no necesita descargar el histórico otra vez ni retroceder lastSeenAt.
@@ -151,17 +191,35 @@ export class TelemetryFacade {
     if (this.selection) this.refresh.next();
   }
   reconnect(): void {
-    if (this.selection) this.select({ ...this.selection });
+    if (this.selection) this.select({ ...this.selection }, this.period(), this.days());
   }
   setDays(days: number): void {
     if (![1, 7, 30].includes(days)) return;
+    this.cancelRequests.next();
+    this.period.set(null);
     this.days.set(days);
     this.offset.set(0);
+    this.clearHistory();
     this.reload();
+  }
+  setPeriod(period: HistoryPeriod): void {
+    if (!validHistoryPeriod(period)) return;
+    this.cancelRequests.next();
+    this.period.set({ ...period });
+    this.offset.set(0);
+    this.clearHistory();
+    this.reload();
+  }
+  private clearHistory(): void {
+    this.history.set({ items: [], total: 0, limit: 100, offset: 0 });
+    this.error.set('');
+    this.busy.set(!!this.selection);
   }
   page(offset: number): void {
     if (offset < 0 || offset >= this.history().total) return;
+    this.cancelRequests.next();
     this.offset.set(offset);
+    this.clearHistory();
     this.reload();
   }
 }

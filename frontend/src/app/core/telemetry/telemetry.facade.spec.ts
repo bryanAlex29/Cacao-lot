@@ -5,6 +5,7 @@ import type {
   TelemetryReading,
   TelemetrySnapshot,
   TelemetrySubscription,
+  SensorStatusEvent,
 } from '@cacaosmart/contracts';
 import { ApiTelemetryDataSource, DemoTelemetryDataSource } from './api-telemetry-data-source';
 import { TelemetryFacade } from './telemetry.facade';
@@ -126,6 +127,40 @@ describe('TelemetryFacade: recuperación REST y aislamiento', () => {
     expect(facade.snapshot()?.reading?.eventId).toBe('new');
     expect(api.snapshot).toHaveBeenCalledTimes(2);
   });
+  it('evento de riego invalida REST sin aplicar su estado, ignora ajenos y duplicado inmediato', () => {
+    facade.select(selection);
+    flush();
+    const event = {
+      schemaVersion: '1.0' as const,
+      plotId: selection.plotId,
+      observation: {
+        ...selection,
+        id: 'change',
+        eventId: 'evt',
+        observedAt: reading.receivedAt,
+        receivedAt: reading.receivedAt,
+        timestampOrigin: 'server' as const,
+        kind: 'change' as const,
+        valve: { relayCommandedOpen: false, feedbackOpen: null },
+        previousValve: { relayCommandedOpen: true, feedbackOpen: null },
+      },
+    };
+    events.next({ kind: 'irrigation', event });
+    flush();
+    expect(facade.irrigationRefresh()).toBe(1);
+    expect(api.snapshot).toHaveBeenCalledTimes(2);
+    expect(facade.snapshot()?.reading?.valve.relayCommandedOpen).toBe(true);
+    events.next({ kind: 'irrigation', event });
+    events.next({ kind: 'irrigation', event: { ...event, plotId: 'other' } });
+    flush();
+    expect(facade.irrigationRefresh()).toBe(1);
+    expect(api.snapshot).toHaveBeenCalledTimes(2);
+    events.next({ kind: 'connected' });
+    flush();
+    expect(facade.irrigationRefresh()).toBe(2);
+    facade.stop();
+    expect(facade.irrigationRefresh()).toBe(0);
+  });
   it('desconexión conserva fecha original y reconexión recupera la lectura perdida', () => {
     facade.select(selection);
     flush();
@@ -137,6 +172,44 @@ describe('TelemetryFacade: recuperación REST y aislamiento', () => {
     flush();
     expect(facade.stream()).toBe('connected');
     expect(facade.snapshot()?.reading?.eventId).toBe('missed');
+  });
+  it('sensor.status invalida REST sin aplicar estado raw y limpia al cambiar selección', () => {
+    facade.select(selection);
+    flush();
+    const event: SensorStatusEvent = {
+      ...selection,
+      schemaVersion: '1.0',
+      evaluatedAt: reading.receivedAt,
+      readingId: 'old',
+      observedAt: '2026-01-01T00:00:00Z',
+      sensors: [
+        {
+          sensorId: 'a',
+          code: 'soil_1',
+          enabled: true,
+          quality: 'missing',
+          freshness: 'stale',
+          range: null,
+          rangeVersion: null,
+        },
+      ],
+    };
+    events.next({ kind: 'sensor', event });
+    flush();
+    expect(facade.sensorRefresh()).toBe(1);
+    expect(api.snapshot).toHaveBeenCalledTimes(2);
+    expect(facade.snapshot()?.reading?.eventId).toBe('new');
+    events.next({ kind: 'sensor', event: { ...event, evaluatedAt: reading.receivedAt } });
+    events.next({ kind: 'sensor', event: { ...event, source: 'demo' } });
+    flush();
+    expect(facade.sensorRefresh()).toBe(1);
+    expect(api.snapshot).toHaveBeenCalledTimes(2);
+    facade.select({ ...selection, deviceId: 'other' });
+    flush();
+    expect(facade.sensorRefresh()).toBe(0);
+    events.next({ kind: 'sensor', event });
+    flush();
+    expect(facade.sensorRefresh()).toBe(0);
   });
   it('consulta periódica recupera datos sin socket', () => {
     facade.select(selection);
@@ -189,6 +262,65 @@ describe('TelemetryFacade: recuperación REST y aislamiento', () => {
     expect(facade.readingStale()).toBe(true);
     vi.advanceTimersByTime(180000);
     expect(facade.status()).toBe('offline');
+  });
+  it('periodo fijo conserva límites al paginar, actualizar, recibir eventos y reconectar', () => {
+    facade.select(selection);
+    flush();
+    const period = { from: '2026-10-01T00:00:00.000Z', to: '2026-10-02T00:00:00.000Z' };
+    facade.page(100);
+    flush();
+    facade.setPeriod(period);
+    expect(facade.offset()).toBe(0);
+    expect(facade.history().items).toEqual([]);
+    expect(facade.busy()).toBe(true);
+    flush();
+    facade.page(100);
+    flush();
+    expect(api.history.mock.calls.at(-1)).toEqual([selection, period.from, period.to, 100]);
+    vi.advanceTimersByTime(15110);
+    events.next({ kind: 'connected' });
+    facade.reload();
+    flush();
+    expect(api.history.mock.calls.at(-1)).toEqual([selection, period.from, period.to, 100]);
+    facade.reconnect();
+    flush();
+    expect(facade.period()).toEqual(period);
+    expect(api.history.mock.calls.at(-1)).toEqual([selection, period.from, period.to, 0]);
+    expect(facade.snapshot()?.reading?.eventId).toBe('new');
+    facade.setDays(7);
+    flush();
+    expect(facade.period()).toBeNull();
+  });
+  it('cambiar periodo cancela de inmediato el GET anterior y un fallo no muestra filas de otro rango', () => {
+    const pending = new Subject<TelemetrySnapshot>();
+    api.snapshot.mockReturnValueOnce(pending);
+    facade.select(selection);
+    flush();
+    expect(pending.observers).toHaveLength(1);
+    api.snapshot.mockReturnValue(throwError(() => new Error('unavailable')));
+    facade.setPeriod({ from: '2026-10-01T00:00:00.000Z', to: '2026-10-02T00:00:00.000Z' });
+    expect(pending.observers).toHaveLength(0);
+    pending.next(snapshot);
+    pending.complete();
+    expect(facade.snapshot()).toBeNull();
+    flush();
+    expect(facade.error()).not.toBe('');
+    expect(facade.history().items).toEqual([]);
+  });
+  it('periodos inválidos no consultan ni alteran selección; nueva selección limpia el filtro', () => {
+    facade.select(selection);
+    flush();
+    const calls = api.history.mock.calls.length;
+    facade.setPeriod({ from: 'bad', to: 'bad' });
+    flush();
+    expect(api.history).toHaveBeenCalledTimes(calls);
+    facade.setPeriod({ from: '2026-10-01T00:00:00.000Z', to: '2026-10-02T00:00:00.000Z' });
+    flush();
+    facade.select({ ...selection, source: 'demo' });
+    flush();
+    expect(facade.period()).toBeNull();
+    expect(facade.days()).toBe(1);
+    expect(demo.history.mock.calls.at(-1)?.[1]).toContain('2026-11-19');
   });
   it('al reconectar manualmente reinicia suscripción sin duplicarla', () => {
     facade.select(selection);

@@ -7,11 +7,12 @@ import { UsersController } from '../users/users.controller';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
+import { BrowserSessionService } from './browser-session.service';
 
 @Module({
   imports: [DatabaseModule, JwtModule.register({})],
   controllers: [AuthController, UsersController],
-  providers: [UsersRepository, UsersService, AuthService, PasswordService],
+  providers: [UsersRepository, UsersService, AuthService, PasswordService, BrowserSessionService],
   exports: [AuthService],
 })
 export class AuthModule {}

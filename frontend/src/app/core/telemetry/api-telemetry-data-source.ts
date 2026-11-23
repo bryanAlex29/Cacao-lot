@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { effect, inject, Injectable, Injector } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { io } from 'socket.io-client';
@@ -13,12 +13,15 @@ import type {
 } from '@cacaosmart/contracts';
 import { AuthService } from '../auth/auth.service';
 import type { TelemetryDataSource, TelemetryStream } from './telemetry-data-source';
+import { matchesIrrigationEvent } from '../irrigation/irrigation-event';
+import { matchesSensorStatus } from './sensor-status-event';
 
 @Injectable({ providedIn: 'root' })
 export class ApiTelemetryDataSource implements TelemetryDataSource {
   readonly source: DataSource = 'real';
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
+  private readonly injector = inject(Injector);
 
   snapshot(selection: TelemetrySubscription) {
     return this.http.get<TelemetrySnapshot>(`/api/v1/plots/${selection.plotId}/dashboard`, {
@@ -87,8 +90,31 @@ export class ApiTelemetryDataSource implements TelemetryDataSource {
       socket.on('device.status', (event: DeviceStatusEvent) => {
         if (event && matches(event)) subscriber.next({ kind: 'status', event });
       });
+      socket.on('irrigation.updated', (event: unknown) => {
+        if (matchesIrrigationEvent(event, { ...selection, source: this.source }))
+          subscriber.next({ kind: 'irrigation', event });
+      });
+      socket.on('sensor.status', (event: unknown) => {
+        if (matchesSensorStatus(event, { ...selection, source: this.source }))
+          subscriber.next({ kind: 'sensor', event });
+      });
       socket.connect();
+      let appliedToken = token;
+      const renewedSession = effect(
+        () => {
+          const current = this.auth.accessToken();
+          if (current && current !== appliedToken) {
+            appliedToken = current;
+            socket.auth = { token: current };
+            // Reauthenticate the socket before the original 15-minute JWT expires.
+            socket.disconnect();
+            socket.connect();
+          }
+        },
+        { injector: this.injector, manualCleanup: true },
+      );
       return () => {
+        renewedSession.destroy();
         socket.removeAllListeners();
         socket.disconnect();
       };

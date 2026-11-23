@@ -9,11 +9,29 @@
       <a class="active" [routerLink]="['/parcelas', plot()?.id, 'dashboard']" aria-current="page"
         ><span aria-hidden="true">⌂</span> Inicio</a
       >
-      <a href="#readings"><span aria-hidden="true">◴</span> Monitoreo</a>
+      <a
+        [routerLink]="[]"
+        fragment="readings"
+        queryParamsHandling="preserve"
+        (click)="scrollToReadings()"
+        ><span aria-hidden="true">◴</span> Monitoreo</a
+      >
       <a routerLink="/parcelas"><span aria-hidden="true">▦</span> Parcelas</a>
       <span class="pending">Diagnóstico IA <small>Próximamente</small></span>
-      <a href="#history"><span aria-hidden="true">↗</span> Historial</a>
-      <span class="pending">Riego <small>Control local ESP32</small></span>
+      <a
+        [routerLink]="[]"
+        fragment="history"
+        queryParamsHandling="preserve"
+        (click)="scrollToHistory()"
+        ><span aria-hidden="true">↗</span> Historial</a
+      >
+      <a
+        [routerLink]="[]"
+        fragment="irrigation-history"
+        queryParamsHandling="preserve"
+        (click)="scrollToIrrigation()"
+        ><span aria-hidden="true">♧</span> Riego</a
+      >
       <span class="pending">Consumo de agua <small>No disponible</small></span>
       <a
         [routerLink]="[]"
@@ -22,7 +40,13 @@
         (click)="scrollToAlerts()"
         ><span aria-hidden="true">⚠</span> Alertas</a
       >
-      <span class="pending">Reportes <small>Próximamente</small></span>
+      <a
+        [routerLink]="[]"
+        fragment="reports"
+        queryParamsHandling="preserve"
+        (click)="scrollToReports()"
+        ><span aria-hidden="true">▤</span> Reportes</a
+      >
       <span class="pending">Configuración <small>Mediante API</small></span>
     </nav>
     <div class="sidebar-footer">
@@ -196,7 +220,7 @@
           automática cada 60 s.
         </p>
       }
-      <div id="readings" class="readings-grid" [attr.aria-busy]="telemetry.busy()">
+      <div id="readings" tabindex="-1" class="readings-grid" [attr.aria-busy]="telemetry.busy()">
         <section class="panel soil-panel">
           <div class="panel-title">
             <h2>Humedad del suelo</h2>
@@ -313,24 +337,21 @@
         <app-diagnosis-preview />
       </div>
       <div class="bottom-grid">
-        <section id="history" class="panel history">
+        <section id="history" tabindex="-1" class="panel history">
           <div class="panel-title">
             <h2>Histórico de humedad</h2>
-            <div class="range" aria-label="Intervalo histórico">
-              @for (days of [1, 7, 30]; track days) {
-                <button
-                  type="button"
-                  [class.active]="telemetry.days() === days"
-                  [attr.aria-pressed]="telemetry.days() === days"
-                  (click)="telemetry.setDays(days)"
-                >
-                  {{ days === 1 ? '24 h' : days + ' días' }}
-                </button>
-              }
-            </div>
           </div>
+          <app-history-period
+            [selection]="alertSelection()"
+            [days]="telemetry.days()"
+            [period]="telemetry.period()"
+            (preset)="telemetry.setDays($event)"
+            (custom)="telemetry.setPeriod($event)"
+          />
           <app-soil-history-chart
             [readings]="telemetry.history().items"
+            [loading]="telemetry.busy()"
+            [failed]="!!telemetry.error()"
             [intervalSeconds]="telemetry.snapshot()?.device?.expectedIntervalSeconds ?? 60"
             [thresholds]="thresholdHistory.states()"
             [source]="source()"
@@ -359,6 +380,11 @@
         </section>
         <app-dashboard-insights [selection]="alertSelection()" [sensors]="alertSensors()" />
       </div>
+      <app-irrigation-history
+        [selection]="alertSelection()"
+        [refreshRevision]="telemetry.irrigationRefresh()"
+      />
+      <app-reports-panel [selection]="alertSelection()" />
       <footer class="page-footer">
         CacaoSmart IoT · TerriTech CITIC 2026 · Hora local del navegador · El ESP32 conserva el
         control seguro del riego.

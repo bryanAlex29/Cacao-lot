@@ -4,6 +4,8 @@
 
 **Actualización posterior:** a petición del usuario se añadió registro público exclusivamente FARMER. Sustituye la política inicial de alta solo administrativa; ver [registration.md](registration.md) para el flujo y sus verificaciones. La creación de ADMIN continúa limitada a la provisión por CLI.
 
+**Corrección posterior a 5.12:** el usuario confirmó cierres a los 15 minutos. Se incorporó [renovación mediante cookie HttpOnly, sesión de ocho horas y revocación al salir](session-renewal.md), con migración aditiva. Sustituye las limitaciones iniciales «recargar exige login», «sin refresh» y «logout no revoca» documentadas abajo como registro histórico; no amplía la duración del JWT ni los roles.
+
 ## Entrega
 
 - Modelos Prisma `User`, `Plot`, `Device` y `Sensor`; relaciones restrictivas, índices, unicidad y timestamps UTC.
@@ -17,15 +19,16 @@
 
 ## Roles y propiedad
 
-| Operación                                               | ADMIN | FARMER |
-| ------------------------------------------------------- | ----- | ------ |
-| Consultar identidad propia                              | Sí    | Sí     |
-| Crear usuario FARMER                                    | Sí    | No     |
-| Listar/consultar parcelas y dispositivos propios        | Sí    | Sí     |
-| Crear/editar/archivar parcela propia                    | Sí    | No     |
-| Registrar/deshabilitar dispositivo propio               | Sí    | No     |
-| Leer o modificar recursos ajenos                        | No    | No     |
-| Crear ADMIN por HTTP o cambiar propietario desde un DTO | No    | No     |
+| Operación                                                  | ADMIN | FARMER |
+| ---------------------------------------------------------- | ----- | ------ |
+| Consultar identidad propia                                 | Sí    | Sí     |
+| Crear usuario FARMER                                       | Sí    | No     |
+| Listar/consultar parcelas y dispositivos propios           | Sí    | Sí     |
+| Crear parcela propia (actualización autorizada 2026-11-22) | Sí    | Sí     |
+| Editar/archivar parcela propia                             | Sí    | No     |
+| Registrar/deshabilitar dispositivo propio                  | Sí    | No     |
+| Leer o modificar recursos ajenos                           | No    | No     |
+| Crear ADMIN por HTTP o cambiar propietario desde un DTO    | No    | No     |
 
 Se usa `404` para recurso inexistente, archivado o ajeno, sin revelar su existencia. El rol ADMIN no concede acceso global. `DELETE` de parcela archiva: no borra filas, dispositivos ni sensores; los recursos de esa parcela dejan de ser accesibles por sus rutas.
 
@@ -35,20 +38,20 @@ Se usa `404` para recurso inexistente, archivado o ajeno, sin revelar su existen
 
 Todos bajo `/api/v1`. Salvo login y salud, requieren `Authorization: Bearer <JWT>`.
 
-| Método | Ruta                               | Función                                                             |
-| ------ | ---------------------------------- | ------------------------------------------------------------------- |
-| POST   | `/auth/login`                      | Correo/contraseña; devuelve token, expiración y usuario público     |
-| GET    | `/auth/me`                         | Identidad activa obtenida en servidor                               |
-| POST   | `/users`                           | ADMIN crea FARMER con nombre, correo y contraseña; no acepta `role` |
-| GET    | `/plots?limit=20&offset=0`         | Página de parcelas propias activas                                  |
-| POST   | `/plots`                           | ADMIN crea parcela propia: `name`, `locationLabel`, `areaM2?`       |
-| GET    | `/plots/:id`                       | Detalle de parcela propia                                           |
-| PATCH  | `/plots/:id`                       | ADMIN edita esos campos, nunca dueño ni umbrales del firmware       |
-| DELETE | `/plots/:id`                       | ADMIN archiva parcela propia; 204                                   |
-| GET    | `/plots/:plotId/devices`           | Página de dispositivos propios con sensores                         |
-| GET    | `/plots/:plotId/devices/:deviceId` | Detalle propio, sin credenciales                                    |
-| POST   | `/plots/:plotId/devices`           | ADMIN registra serial y recibe clave una vez                        |
-| PATCH  | `/plots/:plotId/devices/:deviceId` | ADMIN cambia únicamente `isActive`                                  |
+| Método | Ruta                               | Función                                                                                         |
+| ------ | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| POST   | `/auth/login`                      | Correo/contraseña; devuelve token, expiración y usuario público                                 |
+| GET    | `/auth/me`                         | Identidad activa obtenida en servidor                                                           |
+| POST   | `/users`                           | ADMIN crea FARMER con nombre, correo y contraseña; no acepta `role`                             |
+| GET    | `/plots?limit=20&offset=0`         | Página de parcelas propias activas                                                              |
+| POST   | `/plots`                           | ADMIN/FARMER crean parcela propia: `name`, `locationLabel`, `areaM2?`; propietario desde sesión |
+| GET    | `/plots/:id`                       | Detalle de parcela propia                                                                       |
+| PATCH  | `/plots/:id`                       | ADMIN edita esos campos, nunca dueño ni umbrales del firmware                                   |
+| DELETE | `/plots/:id`                       | ADMIN archiva parcela propia; 204                                                               |
+| GET    | `/plots/:plotId/devices`           | Página de dispositivos propios con sensores                                                     |
+| GET    | `/plots/:plotId/devices/:deviceId` | Detalle propio, sin credenciales                                                                |
+| POST   | `/plots/:plotId/devices`           | ADMIN registra serial y recibe clave una vez                                                    |
+| PATCH  | `/plots/:plotId/devices/:deviceId` | ADMIN cambia únicamente `isActive`                                                              |
 
 Las páginas contienen `{ items, total, limit, offset }`, con `limit` entre 1 y 100 y `offset` entre 0 y 100000. `areaM2` opcional admite `null`; si existe debe ser un número positivo finito. Los campos desconocidos se rechazan, no se ignoran silenciosamente.
 

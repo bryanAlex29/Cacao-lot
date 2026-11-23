@@ -27,9 +27,13 @@
       @if (error()) {
         <p class="error" role="alert">{{ error() }}</p>
       }
-      @if (auth.user()?.role === 'ADMIN') {
+      @if (message()) {
+        <p role="status">{{ message() }}</p>
+      }
+      @if (canCreate()) {
         <section class="panel" aria-labelledby="create-title">
           <h2 id="create-title">Registrar una parcela propia</h2>
+          <p>La parcela quedará asociada a tu cuenta. No se crean sensores ni datos de ejemplo.</p>
           <form [formGroup]="form" (ngSubmit)="create()" [attr.aria-busy]="saving()">
             <div class="fields">
               <label
@@ -89,7 +93,7 @@
             <p class="empty">
               No tienes parcelas registradas.
               {{
-                auth.user()?.role === 'ADMIN'
+                canCreate()
                   ? 'Puedes crear una con el formulario superior.'
                   : 'Solicita al equipo que revise la provisión de tus parcelas.'
               }}

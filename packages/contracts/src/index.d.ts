@@ -54,6 +54,25 @@ export interface ValveState {
   feedbackOpen: boolean | null;
 }
 
+/** Comparison of persisted observations, not a physical irrigation session. */
+export interface ObservedIrrigationEvent extends TelemetrySubscription {
+  id: string;
+  eventId: string;
+  observedAt: string;
+  receivedAt: string;
+  timestampOrigin: 'device' | 'server';
+  kind: 'initial' | 'change';
+  valve: ValveState;
+  previousValve: ValveState | null;
+}
+
+/** A new latest observation after commit; not a command or physical irrigation session. */
+export interface IrrigationUpdatedEvent {
+  schemaVersion: '1.0';
+  plotId: string;
+  observation: ObservedIrrigationEvent;
+}
+
 export interface TelemetryReading {
   eventId: string;
   deviceId: string;
@@ -111,6 +130,27 @@ export interface DeviceStatusEvent extends TelemetrySubscription {
   status: ConnectionStatus;
   lastSeenAt: string | null;
   expectedIntervalSeconds: number;
+}
+
+export type MonitoredSensorCode = SoilSensorId | 'temperatureC' | 'airHumidityPct' | 'rainDetected';
+export interface ObservedSensorStatus {
+  sensorId: string;
+  code: MonitoredSensorCode;
+  enabled: boolean;
+  /** Quality of the latest persisted reading, not calibration inferred from configuration. */
+  quality: SensorHealth | null;
+  freshness: 'unknown' | 'fresh' | 'stale';
+  /** Numeric comparison only; null when disabled, missing, invalid or stale. */
+  range: 'low' | 'within' | 'high' | 'unconfigured' | 'not_applicable' | null;
+  rangeVersion: number | null;
+}
+/** Current derived state, not a durable alert or a physical disconnection diagnosis. */
+export interface SensorStatusEvent extends TelemetrySubscription {
+  schemaVersion: '1.0';
+  evaluatedAt: string;
+  readingId: string | null;
+  observedAt: string | null;
+  sensors: ObservedSensorStatus[];
 }
 
 export interface TelemetryIngestionResult {

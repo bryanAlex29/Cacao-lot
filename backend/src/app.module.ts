@@ -16,6 +16,7 @@ import { IotIngestionModule } from './iot-ingestion/iot-ingestion.module';
 import { ThresholdModule } from './sensor-thresholds/threshold.module';
 import { OfflineAlertModule } from './alerts/offline-alert.module';
 import { MoistureModule } from './alerts/moisture/moisture.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { MoistureModule } from './alerts/moisture/moisture.module';
     ThresholdModule,
     OfflineAlertModule,
     MoistureModule,
+    ReportsModule,
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
   ],
   providers: [

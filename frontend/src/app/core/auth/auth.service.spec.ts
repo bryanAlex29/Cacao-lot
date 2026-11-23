@@ -12,7 +12,7 @@ import { AuthService } from './auth.service';
 import { authInterceptor } from './auth.interceptor';
 import { authGuard } from './auth.guard';
 
-describe('Sesión en memoria e interceptor', () => {
+describe('JWT en memoria, renovación de sesión e interceptor', () => {
   let auth: AuthService;
   let http: HttpTestingController;
   const response = {
@@ -23,6 +23,7 @@ describe('Sesión en memoria e interceptor', () => {
   };
 
   beforeEach(() => {
+    sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([authInterceptor])),
@@ -38,6 +39,7 @@ describe('Sesión en memoria e interceptor', () => {
     http.verify();
     vi.restoreAllMocks();
     vi.useRealTimers();
+    sessionStorage.clear();
   });
 
   function login() {
@@ -52,16 +54,74 @@ describe('Sesión en memoria e interceptor', () => {
     expect(auth.user()?.role).toBe('ADMIN');
     expect(storage).not.toHaveBeenCalled();
     auth.logout();
+    http.expectOne('/api/v1/auth/logout').flush(null, { status: 204, statusText: 'No Content' });
     expect(auth.accessToken()).toBeNull();
     expect(auth.user()).toBeNull();
   });
 
-  it('caduca la sesión sin esperar un error HTTP', () => {
+  it('una cookie caducada rechaza renovación y limpia la sesión sin enviar JWT vencido', () => {
     vi.useFakeTimers();
     login();
-    vi.advanceTimersByTime(900000);
+    vi.advanceTimersByTime(840000);
+    const refresh = http.expectOne('/api/v1/auth/refresh');
+    expect(refresh.request.headers.has('Authorization')).toBe(false);
+    expect(refresh.request.headers.get('X-CacaoSmart-Session')).toBe('1');
+    refresh.flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(auth.user()).toBeNull();
     expect(auth.accessToken()).toBeNull();
+  });
+  it('renueva antes de quince minutos sin cerrar el panel ni persistir JWT', () => {
+    vi.useFakeTimers();
+    login();
+    vi.advanceTimersByTime(840000);
+    http.expectOne('/api/v1/auth/refresh').flush({ ...response, accessToken: 'renewed-token' });
+    vi.advanceTimersByTime(61000);
+    expect(auth.accessToken()).toBe('renewed-token');
+    expect(auth.user()?.role).toBe('ADMIN');
+    expect(sessionStorage.getItem('test-token')).toBeNull();
+  });
+  it('restaura desde cookie del servidor sin guardar contraseña o token en storage', async () => {
+    const initialized = auth.initialize();
+    const refresh = http.expectOne('/api/v1/auth/refresh');
+    expect(refresh.request.headers.has('Authorization')).toBe(false);
+    refresh.flush(response);
+    await initialized;
+    expect(auth.accessToken()).toBe('test-token');
+  });
+  it('varias solicitudes tras suspensión comparten renovación y reciben JWT nuevo', () => {
+    vi.useFakeTimers();
+    login();
+    vi.setSystemTime(Date.now() + 901000);
+    const client = TestBed.inject(HttpClient);
+    client.get('/api/v1/plots').subscribe();
+    client.get('/api/v1/users').subscribe();
+    http.expectOne('/api/v1/auth/refresh').flush({ ...response, accessToken: 'renewed' });
+    for (const url of ['/api/v1/plots', '/api/v1/users']) {
+      const pending = http.expectOne(url);
+      expect(pending.request.headers.get('Authorization')).toBe('Bearer renewed');
+      pending.flush({});
+    }
+  });
+  it('salir cancela renovación pendiente y no restaura tras recarga aunque la red falle', async () => {
+    login();
+    auth.renew().subscribe();
+    const pending = http.expectOne('/api/v1/auth/refresh');
+    auth.logout();
+    expect(pending.cancelled).toBe(true);
+    http.expectOne('/api/v1/auth/logout').flush({}, { status: 503, statusText: 'Unavailable' });
+    await auth.initialize();
+    http.expectNone('/api/v1/auth/refresh');
+    expect(auth.user()).toBeNull();
+  });
+  it('fallo temporal reintenta sin presentar un JWT caducado como válido', () => {
+    vi.useFakeTimers();
+    login();
+    vi.advanceTimersByTime(840000);
+    http.expectOne('/api/v1/auth/refresh').flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(auth.user()).not.toBeNull();
+    vi.advanceTimersByTime(10000);
+    http.expectOne('/api/v1/auth/refresh').flush({ ...response, accessToken: 'recovered' });
+    expect(auth.accessToken()).toBe('recovered');
   });
 
   it('registra una cuenta sin enviar token anterior y activa sesión FARMER en memoria', () => {
@@ -114,6 +174,22 @@ describe('Sesión en memoria e interceptor', () => {
     http.expectOne('/api/v1/auth/login').flush({ ...response, accessToken: 'new-token' });
     old.flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(auth.accessToken()).toBe('new-token');
+  });
+  it('un 401 tras renovación anterior tampoco elimina un login más reciente', () => {
+    vi.useFakeTimers();
+    login();
+    vi.setSystemTime(Date.now() + 901000);
+    TestBed.inject(HttpClient)
+      .get('/api/v1/plots')
+      .subscribe({ error: () => undefined });
+    http
+      .expectOne('/api/v1/auth/refresh')
+      .flush({ ...response, accessToken: 'previous-renewed-token' });
+    const old = http.expectOne('/api/v1/plots');
+    auth.login('test@example.test', 'a-test-password').subscribe();
+    http.expectOne('/api/v1/auth/login').flush({ ...response, accessToken: 'latest-login-token' });
+    old.flush({}, { status: 401, statusText: 'Unauthorized' });
+    expect(auth.accessToken()).toBe('latest-login-token');
   });
 
   it('guardia redirige al login y permite navegar solo con sesión', () => {

@@ -37,6 +37,7 @@ export function configureApp(app: INestApplication): void {
       )
       .setVersion('0.5.0')
       .addBearerAuth()
+      .addCookieAuth('cacaosmart_session', { type: 'apiKey', in: 'cookie' }, 'browser-session')
       .build();
     SwaggerModule.setup('api/v1/docs', app, SwaggerModule.createDocument(app, schema));
   }

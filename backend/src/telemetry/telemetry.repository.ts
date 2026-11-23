@@ -1,9 +1,18 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { IotTelemetryPayload } from '@cacaosmart/contracts';
+import type {
+  DataSource,
+  IotTelemetryPayload,
+  ObservedIrrigationEvent,
+  Page,
+} from '@cacaosmart/contracts';
 import type { AuthenticatedDevice } from '../devices/device-auth.service';
 import { PrismaService } from '../database/prisma.service';
 import { normalize, readingInclude, soilCodes, toReading } from './telemetry.mapping';
+import {
+  irrigationObservation,
+  valveObservationSelect,
+} from '../irrigation/irrigation-observation';
 
 const latestOrder = [
   { effectiveAt: 'desc' },
@@ -46,7 +55,7 @@ export class TelemetryRepository {
       if (existing) {
         if (existing.payloadHash !== payloadHash)
           throw new ConflictException('eventId ya utilizado con datos distintos');
-        return { duplicate: true, reading: toReading(existing) };
+        return { duplicate: true, reading: toReading(existing), irrigationUpdate: null };
       }
       // No deja que la habilitación de una sonda cambie durante la normalización.
       await tx.$queryRaw`SELECT id FROM sensors WHERE device_id = ${auth.id}::uuid FOR SHARE`;
@@ -58,6 +67,11 @@ export class TelemetryRepository {
         receivedAt,
         device.source,
       );
+      const previous = await tx.reading.findFirst({
+        where: { deviceId: auth.id, source: device.source },
+        orderBy: latestOrder,
+        select: valveObservationSelect,
+      });
       const stored = await tx.reading.create({
         data: {
           deviceId: auth.id,
@@ -89,7 +103,11 @@ export class TelemetryRepository {
         include: readingInclude,
       });
       await tx.device.update({ where: { id: auth.id }, data: { lastSeenAt: receivedAt } });
-      return { duplicate: false, reading: toReading(stored) };
+      return {
+        duplicate: false,
+        reading: toReading(stored),
+        irrigationUpdate: irrigationObservation(auth.plotId, stored, previous),
+      };
     });
   }
 
@@ -140,5 +158,68 @@ export class TelemetryRepository {
       this.database.reading.count({ where }),
     ]);
     return { items: rows.map(toReading), total, limit, offset };
+  }
+
+  async irrigationHistory(
+    deviceId: string,
+    plotId: string,
+    ownerId: string,
+    source: DataSource,
+    from: Date,
+    to: Date,
+    limit: number,
+    offset: number,
+  ): Promise<Page<ObservedIrrigationEvent>> {
+    // One statement/snapshot for count + page. Include exactly one predecessor before
+    // the period so filtering/pagination never invents an initial/change event.
+    const [result] = await this.database.$queryRaw<
+      {
+        items: ObservedIrrigationEvent[];
+        total: number;
+      }[]
+    >`
+      WITH authorized AS (
+        SELECT d.id FROM devices d JOIN plots p ON p.id = d.plot_id
+        WHERE d.id = ${deviceId}::uuid AND p.id = ${plotId}::uuid
+          AND p.owner_id = ${ownerId}::uuid AND p.archived_at IS NULL
+          AND d.source = ${source}::"TelemetrySource"
+      ), period AS (
+        SELECT r.* FROM readings r JOIN authorized a ON a.id = r.device_id
+        WHERE r.source = ${source}::"TelemetrySource"
+          AND r.effective_at >= ${from} AND r.effective_at <= ${to}
+      ), predecessor AS (
+        SELECT r.* FROM readings r JOIN authorized a ON a.id = r.device_id
+        WHERE r.source = ${source}::"TelemetrySource" AND r.effective_at < ${from}
+        ORDER BY r.effective_at DESC, r.received_at DESC, r.ingestion_order DESC LIMIT 1
+      ), ordered AS (
+        SELECT *, lag(id) OVER w AS previous_id,
+          lag(relay_commanded_open) OVER w AS previous_relay,
+          lag(feedback_open) OVER w AS previous_feedback
+        FROM (SELECT * FROM period UNION ALL SELECT * FROM predecessor) observations
+        WINDOW w AS (ORDER BY effective_at, received_at, ingestion_order)
+      ), changes AS (
+        SELECT * FROM ordered WHERE effective_at >= ${from} AND (
+          previous_id IS NULL OR relay_commanded_open IS DISTINCT FROM previous_relay
+          OR feedback_open IS DISTINCT FROM previous_feedback
+        )
+      ), page AS (
+        SELECT * FROM changes
+        ORDER BY effective_at DESC, received_at DESC, ingestion_order DESC
+        LIMIT ${limit} OFFSET ${offset}
+      )
+      SELECT (SELECT count(*)::int FROM changes) AS total,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'id', id, 'eventId', event_id, 'plotId', ${plotId}::text,
+          'deviceId', device_id, 'source', source,
+          'observedAt', to_char(effective_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+          'receivedAt', to_char(received_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+          'timestampOrigin', timestamp_origin,
+          'kind', CASE WHEN previous_id IS NULL THEN 'initial' ELSE 'change' END,
+          'valve', jsonb_build_object('relayCommandedOpen', relay_commanded_open, 'feedbackOpen', feedback_open),
+          'previousValve', CASE WHEN previous_id IS NULL THEN NULL ELSE
+            jsonb_build_object('relayCommandedOpen', previous_relay, 'feedbackOpen', previous_feedback) END
+        ) ORDER BY effective_at DESC, received_at DESC, ingestion_order DESC) FROM page), '[]'::jsonb) AS items
+    `;
+    return { ...result, limit, offset };
   }
 }

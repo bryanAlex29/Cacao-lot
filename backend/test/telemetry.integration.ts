@@ -8,7 +8,7 @@ import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/database/prisma.service';
 import { PasswordService } from '../src/auth/password.service';
 import request from 'supertest';
-import type { IotTelemetryPayload } from '@cacaosmart/contracts';
+import type { IotTelemetryPayload, ObservedIrrigationEvent, Page } from '@cacaosmart/contracts';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { DeviceAuthService } from '../src/devices/device-auth.service';
@@ -332,5 +332,260 @@ describe('Ingesta y consultas PostgreSQL', () => {
     expect(JSON.stringify(response.body)).not.toMatch(
       /credentialHash|payloadHash|ingestionOrder|passwordHash/,
     );
+  });
+
+  describe('Reportes CSV autorizados', () => {
+    const period = { from: '2026-06-01T00:00:00Z', to: '2026-06-02T00:00:00Z' };
+    const report = (kind = 'readings', query: Record<string, string> = {}, auth = token) =>
+      request(app.getHttpServer())
+        .get(`/api/v1/plots/${plotId}/reports/${kind}.csv`)
+        .auth(auth, { type: 'bearer' })
+        .query({ deviceId, ...period, ...query });
+
+    it('exporta todas las lecturas filtradas, calidad y null sin fórmulas ejecutables ni secretos', async () => {
+      await send({
+        ...payload('=HYPERLINK("test")'),
+        recordedAt: '2026-06-01T12:00:00Z',
+        soilMoisture: { soil_1: 0, soil_2: 50, soil_3: null },
+        temperatureC: -5,
+        valve: { relayCommandedOpen: false, feedbackOpen: null },
+      }).expect(201);
+      const response = await report().expect(200);
+      expect(response.headers['content-type']).toContain('text/csv');
+      expect(response.headers['content-disposition']).toContain('attachment;');
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.text).toContain('"\'=HYPERLINK(""test"")"');
+      expect(response.text).toContain('"quality_soil_1"');
+      expect(response.text).toContain('"uncalibrated"');
+      expect(response.text).toContain('"-5"');
+      expect(response.text).toContain('"null"');
+      expect(response.text.split('\r\n')).toHaveLength(3);
+      expect(response.text).not.toMatch(/payloadHash|credentialHash|liters|duration/);
+    });
+    it('riego conserva comparación con predecesor y no crea sesiones', async () => {
+      const response = await report('irrigation-events').expect(200);
+      expect(response.text).toContain('previous_observation_available');
+      expect(response.text).toContain('observation_kind');
+      expect(response.text).not.toMatch(/liters|duration|started_at/);
+    });
+    it('periodo vacío genera solo encabezados sin fabricar resultados', async () => {
+      for (const kind of ['readings', 'irrigation-events']) {
+        const response = await report(kind, {
+          from: '2026-06-02T00:00:00Z',
+          to: '2026-06-03T00:00:00Z',
+        }).expect(200);
+        expect(response.text.split('\r\n')).toHaveLength(2);
+      }
+    });
+    it('exige JWT y propiedad incluso ADMIN, valida origen/dispositivo y filtros estrictos', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/v1/plots/${plotId}/reports/readings.csv`)
+        .query(period)
+        .expect(401);
+      for (const kind of ['readings', 'irrigation-events'])
+        await report(kind, {}, otherToken).expect(404);
+      await report('readings', { deviceId: demoId }).expect(404);
+      await report('readings', { deviceId: 'bad' }).expect(400);
+      for (const query of [
+        { from: 'bad' },
+        { from: '2026-05-01T00:00:00Z' },
+        { from: '2026-06-03T00:00:00Z' },
+        { from: '2026-06-01T00:00:00' },
+        { ownerId },
+        { limit: '1' },
+        { offset: '1' },
+      ] as Record<string, string>[])
+        await report('readings', query).expect(400);
+    });
+    it('FARMER propietario exporta DEMO solo si está habilitado; no cambia rol ni consulta reales', async () => {
+      await send(
+        { ...payload(), deviceId: demoId, recordedAt: '2026-06-01T13:00:00Z' },
+        demoId,
+        demoKey,
+      ).expect(201);
+      await db.user.update({ where: { id: ownerId }, data: { role: 'FARMER' } });
+      const response = await report('readings', { deviceId: demoId, source: 'demo' }).expect(200);
+      expect(response.text).toContain('"demo"');
+      expect(response.text).not.toContain('"real"');
+      app.get(ConfigService).set('TELEMETRY_MODE', 'real');
+      await report('readings', { deviceId: demoId, source: 'demo' }).expect(403);
+      app.get(ConfigService).set('TELEMETRY_MODE', 'demo');
+      await db.user.update({ where: { id: ownerId }, data: { role: 'ADMIN' } });
+    });
+  });
+
+  describe('Historial derivado de riego observado', () => {
+    let id: string;
+    let secret: string;
+    const from = '2026-04-01T00:00:00.000Z';
+    const to = '2026-04-02T00:00:00.000Z';
+    const list = (query: Record<string, string | number> = {}, auth = token) =>
+      request(app.getHttpServer())
+        .get(`/api/v1/plots/${plotId}/irrigation-events`)
+        .auth(auth, { type: 'bearer' })
+        .query({ deviceId: id, from, to, ...query });
+    const observation = async (
+      eventId: string,
+      time: string,
+      relay: boolean | null,
+      feedback: boolean | null = null,
+    ) => {
+      const input = {
+        ...payload(eventId),
+        deviceId: id,
+        recordedAt: time,
+        valve: { relayCommandedOpen: relay, feedbackOpen: feedback },
+      };
+      await send(input, id, secret).expect(201);
+      return input;
+    };
+    beforeAll(async () => {
+      const device = await request(app.getHttpServer())
+        .post(`/api/v1/plots/${plotId}/devices`)
+        .auth(token, { type: 'bearer' })
+        .send({ serial: 'observed-irrigation' })
+        .expect(201);
+      id = device.body.id as string;
+      secret = device.body.deviceKey as string;
+    });
+    it('sin lecturas no inventa eventos y exige JWT, propiedad y selección no ambigua', async () => {
+      expect((await list().expect(200)).body).toEqual({
+        items: [],
+        total: 0,
+        limit: 20,
+        offset: 0,
+      });
+      await list({}, otherToken).expect(404);
+      await list({ deviceId: demoId }).expect(404);
+      await request(app.getHttpServer())
+        .get(`/api/v1/plots/${plotId}/irrigation-events`)
+        .expect(401);
+      await request(app.getHttpServer())
+        .get(`/api/v1/plots/${plotId}/irrigation-events`)
+        .auth(token, { type: 'bearer' })
+        .expect(409);
+      await list({ deviceId: 'invalid' }).expect(400);
+    });
+    it('incluye primera observación, omite iguales, conserva null y reintentos no duplican', async () => {
+      await observation('initial', from, false);
+      await observation('unchanged', '2026-04-01T00:01:00Z', false);
+      const open = await observation('open', '2026-04-01T00:02:00Z', true);
+      await send(open, id, secret).expect(201);
+      await observation('unknown', '2026-04-01T00:03:00Z', null);
+      await observation('feedback-only', '2026-04-01T00:04:00Z', null, true);
+      const page = (await list().expect(200)).body as Page<ObservedIrrigationEvent>;
+      expect(page.total).toBe(4);
+      expect(page.items.map((item) => item.eventId)).toEqual([
+        'feedback-only',
+        'unknown',
+        'open',
+        'initial',
+      ]);
+      expect(page.items[0]).toMatchObject({
+        valve: { relayCommandedOpen: null, feedbackOpen: true },
+        source: 'real',
+        plotId,
+        deviceId: id,
+      });
+      expect(page.items[1].previousValve).toEqual({ relayCommandedOpen: true, feedbackOpen: null });
+      expect(page.items[3]).toMatchObject({
+        kind: 'initial',
+        previousValve: null,
+        timestampOrigin: 'device',
+        observedAt: from,
+      });
+      expect(JSON.stringify(page)).not.toMatch(
+        /credentialHash|payloadHash|duration|liters|ingestionOrder/,
+      );
+    });
+    it('considera predecesor fuera del filtro y pagina después de comparar', async () => {
+      const filtered = await list({ from: '2026-04-01T00:01:00Z', limit: 1, offset: 2 }).expect(
+        200,
+      );
+      expect(filtered.body.total).toBe(3);
+      expect(filtered.body.items[0]).toMatchObject({ eventId: 'open', kind: 'change' });
+      expect(
+        (await list({ from: '2026-04-01T00:01:00Z', to: '2026-04-01T00:01:00Z' }).expect(200)).body
+          .total,
+      ).toBe(0);
+      expect((await list({ offset: 100 }).expect(200)).body.items).toEqual([]);
+    });
+    it('incorpora observación tardía por tiempo efectivo sin inventar inicio físico', async () => {
+      await observation('late-close', '2026-04-01T00:02:30Z', false);
+      const page = (await list().expect(200)).body as Page<ObservedIrrigationEvent>;
+      expect(page.items.map((item) => item.eventId)).toEqual([
+        'feedback-only',
+        'unknown',
+        'late-close',
+        'open',
+        'initial',
+      ]);
+      expect(page.items[1].previousValve?.relayCommandedOpen).toBe(false);
+      expect(page.items[2].kind).toBe('change');
+    });
+    it('desempata tiempo y recepción iguales por orden de ingesta', async () => {
+      const time = '2026-04-01T00:05:00.000Z';
+      await observation('tie-first', time, false);
+      await observation('tie-second', time, true);
+      await db.reading.updateMany({
+        where: { deviceId: id, eventId: { in: ['tie-first', 'tie-second'] } },
+        data: { receivedAt: new Date(time) },
+      });
+      const page = (await list({ from: time, to: time }).expect(200))
+        .body as Page<ObservedIrrigationEvent>;
+      expect(page.items.map((item) => item.eventId)).toEqual(['tie-second', 'tie-first']);
+    });
+    it('aísla DEMO, aplica política y permite FARMER propietario e histórico de equipo deshabilitado', async () => {
+      // Own fixture: older observations inserted by report tests may move the
+      // initial event outside this period without implying a recent change.
+      await send(
+        {
+          ...payload(),
+          deviceId: demoId,
+          valve: { relayCommandedOpen: false, feedbackOpen: null },
+        },
+        demoId,
+        demoKey,
+      ).expect(201);
+      const page = (
+        await list({
+          deviceId: demoId,
+          source: 'demo',
+          from: new Date(Date.now() - 86400000).toISOString(),
+          to: new Date().toISOString(),
+        }).expect(200)
+      ).body as Page<ObservedIrrigationEvent>;
+      expect(page.items.length).toBeGreaterThan(0);
+      expect(page.items.every((item) => item.source === 'demo' && item.deviceId === demoId)).toBe(
+        true,
+      );
+      app.get(ConfigService).set('TELEMETRY_MODE', 'real');
+      await list({ source: 'demo', deviceId: demoId }).expect(403);
+      app.get(ConfigService).set('TELEMETRY_MODE', 'demo');
+      await db.user.update({ where: { id: ownerId }, data: { role: 'FARMER' } });
+      await db.device.update({ where: { id }, data: { isActive: false } });
+      await list().expect(200);
+      await db.plot.update({ where: { id: plotId }, data: { archivedAt: new Date() } });
+      await list().expect(404);
+      await db.plot.update({ where: { id: plotId }, data: { archivedAt: null } });
+      await db.user.update({ where: { id: ownerId }, data: { isActive: false } });
+      await list().expect(401);
+      await db.user.update({ where: { id: ownerId }, data: { isActive: true, role: 'ADMIN' } });
+    });
+    it('valida rangos, paginación y documenta respuesta OpenAPI', async () => {
+      const invalidQueries: Record<string, string | number>[] = [
+        { from: '2026-01-01T00:00:00Z' },
+        { from: '2026-04-03T00:00:00Z' },
+        { from: 'bad' },
+        { limit: 101 },
+        { offset: -1 },
+        { from: '2026-04-01T00:00:00' },
+      ];
+      for (const query of invalidQueries) await list(query).expect(400);
+      const spec = await request(app.getHttpServer()).get('/api/v1/docs-json').expect(200);
+      expect(
+        spec.body.paths['/api/v1/plots/{id}/irrigation-events'].get.responses['200'],
+      ).toBeDefined();
+    });
   });
 });

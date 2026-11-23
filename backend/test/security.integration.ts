@@ -197,7 +197,7 @@ describe('Seguridad HTTP y persistencia PostgreSQL reales', () => {
       .expect(400);
   });
 
-  it('aplica lectura FARMER sin permitir escrituras ni altas de usuarios', async () => {
+  it('permite alta de parcela propia FARMER sin habilitar otras escrituras', async () => {
     await request(app.getHttpServer())
       .get(`/api/v1/plots/${farmerPlotId}`)
       .auth(farmerToken, { type: 'bearer' })
@@ -206,11 +206,38 @@ describe('Seguridad HTTP y persistencia PostgreSQL reales', () => {
       .get(`/api/v1/plots/${plotId}`)
       .auth(farmerToken, { type: 'bearer' })
       .expect(404);
-    await request(app.getHttpServer())
+    const created = await request(app.getHttpServer())
       .post('/api/v1/plots')
       .auth(farmerToken, { type: 'bearer' })
       .send({ name: 'x', locationLabel: 'y' })
+      .expect(201);
+    expect(created.body.ownerId).toBe(farmerId);
+    expect(created.body.areaM2).toBeNull();
+    expect(
+      (await database.plot.findUniqueOrThrow({ where: { id: created.body.id as string } })).ownerId,
+    ).toBe(farmerId);
+    expect(await database.device.count({ where: { plotId: created.body.id as string } })).toBe(0);
+    for (const auth of [tokenA, tokenB]) {
+      await request(app.getHttpServer())
+        .get(`/api/v1/plots/${created.body.id}`)
+        .auth(auth, { type: 'bearer' })
+        .expect(404);
+    }
+    await request(app.getHttpServer())
+      .delete(`/api/v1/plots/${created.body.id}`)
+      .auth(farmerToken, { type: 'bearer' })
       .expect(403);
+    for (const body of [
+      { name: 'x', locationLabel: 'y', ownerId: adminId },
+      { name: 'x', locationLabel: 'y', role: 'ADMIN' },
+      { name: ' ', locationLabel: 'y' },
+      { name: 'x', locationLabel: 'y', areaM2: 0 },
+    ])
+      await request(app.getHttpServer())
+        .post('/api/v1/plots')
+        .auth(farmerToken, { type: 'bearer' })
+        .send(body)
+        .expect(400);
     await request(app.getHttpServer())
       .patch(`/api/v1/plots/${farmerPlotId}`)
       .auth(farmerToken, { type: 'bearer' })
@@ -323,15 +350,20 @@ describe('Seguridad HTTP y persistencia PostgreSQL reales', () => {
   it('revalida usuario y rol en base aun con JWT firmado vigente', async () => {
     await database.user.update({ where: { id: farmerId }, data: { isActive: false } });
     await request(app.getHttpServer())
+      .post('/api/v1/plots')
+      .auth(farmerToken, { type: 'bearer' })
+      .send({ name: 'x', locationLabel: 'y' })
+      .expect(401);
+    await request(app.getHttpServer())
       .get('/api/v1/auth/me')
       .auth(farmerToken, { type: 'bearer' })
       .expect(401);
     await database.user.update({ where: { id: farmerId }, data: { isActive: true } });
     await database.user.update({ where: { id: adminId }, data: { role: 'FARMER' } });
     await request(app.getHttpServer())
-      .post('/api/v1/plots')
+      .patch(`/api/v1/plots/${plotId}`)
       .auth(tokenA, { type: 'bearer' })
-      .send({ name: 'x', locationLabel: 'y' })
+      .send({ name: 'x' })
       .expect(403);
     await database.user.update({ where: { id: adminId }, data: { role: 'ADMIN' } });
   });
@@ -409,7 +441,7 @@ describe('Seguridad HTTP y persistencia PostgreSQL reales', () => {
       .post('/api/v1/plots')
       .auth(registeredToken, { type: 'bearer' })
       .send({ name: 'x', locationLabel: 'y' })
-      .expect(403);
+      .expect(201);
   });
 
   it('registro duplicado no sobrescribe cuenta ni devuelve secretos', async () => {

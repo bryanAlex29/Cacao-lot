@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page } from 'playwright-core';
 import { spawn, ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, writeFile, access } from 'node:fs/promises';
+import { mkdtemp, writeFile, access, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppModule } from '../src/app.module';
@@ -18,6 +18,7 @@ import { getOptionsToken } from '@nestjs/throttler';
 import { OfflineAlertRepository } from '../src/alerts/offline-alert.repository';
 import { SourcePolicy } from '../src/integrations/source-policy.service';
 import { MoistureRepository } from '../src/alerts/moisture/moisture.repository';
+import type { SensorStatusEvent } from '@cacaosmart/contracts';
 
 describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → Angular', () => {
   let app: INestApplication;
@@ -37,6 +38,21 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
   let adminDeviceId: string;
   let adminDeviceKey: string;
   const errors: string[] = [];
+  const sensorListeners = new Set<(event: SensorStatusEvent) => void>();
+  const waitForSensor = (predicate: (event: SensorStatusEvent) => boolean) =>
+    new Promise<SensorStatusEvent>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        sensorListeners.delete(listener);
+        reject(new Error('El navegador no recibió sensor.status esperado'));
+      }, 12000);
+      const listener = (event: SensorStatusEvent) => {
+        if (!predicate(event)) return;
+        clearTimeout(timer);
+        sensorListeners.delete(listener);
+        resolve(event);
+      };
+      sensorListeners.add(listener);
+    });
   const unexpectedRateLimits: string[] = [];
   const password = 'Browser-test!';
 
@@ -248,58 +264,201 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await page.screenshot({ path: join(directory, 'dashboard-desktop.png'), fullPage: true });
   }, 30000);
 
-  it('abrir Alertas conserva sesión, parcela y dispositivo sin navegación de documento, incluso al repetir el clic', async () => {
-    const initial = new URL(page.url());
-    const selectedDevice = await page
-      .getByLabel('Dispositivo de telemetría', { exact: true })
-      .inputValue();
-    const documentRequests: string[] = [];
-    const listener = (req: import('playwright-core').Request) => {
-      if (req.isNavigationRequest() && req.frame() === page.mainFrame())
-        documentRequests.push(req.url());
-    };
-    page.on('request', listener);
-    try {
-      await page.getByRole('link', { name: 'Alertas', exact: true }).click();
-      await page.waitForURL((url) => url.pathname === initial.pathname && url.hash === '#alerts');
-      await page.waitForFunction(() => {
-        const panel = document.getElementById('alerts');
-        return (
-          panel &&
-          document.activeElement === panel &&
-          panel.getBoundingClientRect().top < innerHeight
-        );
-      });
-      expect(await page.getByRole('button', { name: 'Salir', exact: true }).count()).toBe(1);
-      expect(await page.locator('#email').count()).toBe(0);
-      expect(await page.getByLabel('Dispositivo de telemetría', { exact: true }).inputValue()).toBe(
-        selectedDevice,
-      );
-      expect(await page.getByLabel('Origen de telemetría', { exact: true }).inputValue()).toBe(
-        'demo',
-      );
-      const response = page.waitForResponse(
-        (res) => res.url().includes(`/plots/${plotId}/alerts?`) && res.status() === 200,
-      );
-      await page
-        .locator('app-offline-alerts-panel')
-        .getByRole('button', { name: 'Actualizar alertas', exact: true })
-        .click();
-      await response;
-      await page.evaluate(() => {
-        (document.activeElement as HTMLElement | null)?.blur();
-        window.scrollTo(0, 0);
-      });
-      await page.getByRole('link', { name: 'Alertas', exact: true }).click();
-      await page.waitForFunction(
-        () => document.activeElement === document.getElementById('alerts'),
-      );
-      expect(new URL(page.url()).pathname).toBe(initial.pathname);
-      expect(documentRequests).toEqual([]);
-    } finally {
-      page.off('request', listener);
+  it('FARMER descarga CSV DEMO con filtros, conserva sesión y recupera errores de exportación', async () => {
+    const path = new URL(page.url()).pathname;
+    await page.getByRole('link', { name: 'Reportes', exact: true }).click();
+    await page.waitForURL((url) => url.pathname === path && url.hash === '#reports');
+    const panel = page.locator('app-reports-panel');
+    await panel.getByRole('button', { name: '24 h', exact: true }).click();
+    for (const [button, kind] of [
+      ['Descargar lecturas CSV', 'readings'],
+      ['Descargar riego observado CSV', 'irrigation-events'],
+    ] as const) {
+      const pending = page.waitForEvent('download');
+      await panel.getByRole('button', { name: button, exact: true }).click();
+      const download = await pending;
+      expect(download.suggestedFilename()).toBe(`cacaosmart-${kind}-demo.csv`);
+      const target = join(directory, `${kind}-demo.csv`);
+      await download.saveAs(target);
+      const csv = await readFile(target, 'utf8');
+      expect(csv).toContain('"demo"');
+      expect(csv).toContain('sim:browser:0');
+      expect(csv).toContain('"null"');
+      expect(csv).not.toMatch(/credentialHash|passwordHash|liters|duration/);
     }
-  });
+    await page.route('**/reports/readings.csv?*', (route) =>
+      route.fulfill({ status: 413, body: '{}' }),
+    );
+    await panel.getByRole('button', { name: 'Descargar lecturas CSV', exact: true }).click();
+    await text('app-reports-panel [role="alert"]', 'Reduce el periodo');
+    await page.unroute('**/reports/readings.csv?*');
+    await panel.getByLabel('Desde (hora local)', { exact: true }).fill('2026-01-01T00:00');
+    await panel.getByLabel('Hasta (hora local)', { exact: true }).fill('2026-01-02T00:00');
+    const emptyDownload = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Descargar lecturas CSV', exact: true }).click();
+    const empty = await emptyDownload;
+    await empty.saveAs(join(directory, 'readings-empty.csv'));
+    expect(
+      (await readFile(join(directory, 'readings-empty.csv'), 'utf8')).split('\r\n'),
+    ).toHaveLength(2);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: join(directory, 'reports-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1050 });
+    expect(await page.getByRole('button', { name: 'Salir', exact: true }).count()).toBe(1);
+  }, 30000);
+
+  it('consulta historial observado DEMO sin control remoto, recupera errores y conserva sesión al abrir Riego', async () => {
+    const initial = new URL(page.url()).pathname;
+    await page.getByRole('link', { name: 'Riego', exact: true }).click();
+    await page.waitForURL((url) => url.pathname === initial && url.hash === '#irrigation-history');
+    const panel = page.locator('app-irrigation-history');
+    await text('app-irrigation-history', 'DEMO');
+    await panel
+      .getByRole('button', { name: 'Consultar / actualizar historial', exact: true })
+      .click();
+    await text('app-irrigation-history tbody', 'Primera observación');
+    await text('app-irrigation-history tbody', 'Orden de apertura');
+    await text('app-irrigation-history tbody', 'Sin confirmación');
+    const fail = '**/irrigation-events?*';
+    await page.route(fail, (route) => route.fulfill({ status: 503, body: '{}' }));
+    await panel
+      .getByRole('button', { name: 'Consultar / actualizar historial', exact: true })
+      .click();
+    await text('app-irrigation-history', 'No se pudo consultar');
+    expect(await panel.locator('tbody').count()).toBe(0);
+    await page.unroute(fail);
+    await panel.getByRole('button', { name: 'Reintentar', exact: true }).click();
+    await text('app-irrigation-history tbody', 'Primera observación');
+    await panel.getByRole('button', { name: '7 días', exact: true }).click();
+    await text('app-irrigation-history tbody', 'Primera observación');
+    expect(await page.getByRole('button', { name: 'Salir', exact: true }).count()).toBe(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: join(directory, 'irrigation-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1050 });
+  }, 30000);
+
+  it('historial consultado recibe cambios en vivo y recupera por REST una observación perdida al reconectar', async () => {
+    const publish = async (eventId: string, relayCommandedOpen: boolean) => {
+      const result = await fetch(`${apiUrl}/api/v1/iot/telemetry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-Id': deviceId,
+          'X-Device-Key': deviceKey,
+        },
+        body: JSON.stringify({
+          schemaVersion: '1.2',
+          deviceId,
+          eventId,
+          recordedAt: null,
+          soilMoisture: { soil_1: 25, soil_2: 45, soil_3: 65 },
+          temperatureC: 26,
+          airHumidityPct: 70,
+          rainDetected: false,
+          valve: { relayCommandedOpen, feedbackOpen: null },
+        }),
+      });
+      expect(result.status).toBe(201);
+    };
+    await text('main', 'Canal en vivo: Conectado');
+    const refreshed = page.waitForResponse(
+      (r) => r.url().includes('/irrigation-events?') && r.status() === 200,
+    );
+    await publish('browser-irrigation-live-close', false);
+    await refreshed;
+    const close = page.locator('[data-event-id="browser-irrigation-live-close"]');
+    await close.waitFor();
+    expect(await close.textContent()).toContain('Orden de cierre');
+    expect(await close.textContent()).toContain('Sin confirmación');
+    await page.context().setOffline(true);
+    try {
+      await delay(500);
+      await publish('browser-irrigation-missed-open', true);
+      await delay(500);
+      expect(await page.locator('[data-event-id="browser-irrigation-missed-open"]').count()).toBe(
+        0,
+      );
+    } finally {
+      await page.context().setOffline(false);
+    }
+    await text('main', 'Canal en vivo: Conectado', 25000);
+    await page
+      .locator('[data-event-id="browser-irrigation-missed-open"]')
+      .waitFor({ timeout: 25000 });
+    await text('.irrigation-body', 'Orden de apertura');
+    await page.screenshot({ path: join(directory, 'irrigation-realtime.png'), fullPage: true });
+    expect(errors).toEqual([]);
+  }, 45000);
+
+  it.each([
+    ['Alertas', 'alerts'],
+    ['Monitoreo', 'readings'],
+    ['Historial', 'history'],
+  ])(
+    'abrir %s conserva sesión, parcela y dispositivo sin navegación de documento, incluso al repetir el clic',
+    async (label, fragment) => {
+      const initial = new URL(page.url());
+      const selectedDevice = await page
+        .getByLabel('Dispositivo de telemetría', { exact: true })
+        .inputValue();
+      const documentRequests: string[] = [];
+      const listener = (req: import('playwright-core').Request) => {
+        if (req.isNavigationRequest() && req.frame() === page.mainFrame())
+          documentRequests.push(req.url());
+      };
+      page.on('request', listener);
+      try {
+        await page.getByRole('link', { name: label, exact: true }).click();
+        await page.waitForURL(
+          (url) => url.pathname === initial.pathname && url.hash === `#${fragment}`,
+        );
+        expect(new URL(page.url()).search).toBe(initial.search);
+        await page.waitForFunction((id) => {
+          const panel = document.getElementById(id);
+          return (
+            panel &&
+            document.activeElement === panel &&
+            panel.getBoundingClientRect().top < innerHeight
+          );
+        }, fragment);
+        expect(await page.getByRole('button', { name: 'Salir', exact: true }).count()).toBe(1);
+        expect(await page.locator('#email').count()).toBe(0);
+        expect(
+          await page.getByLabel('Dispositivo de telemetría', { exact: true }).inputValue(),
+        ).toBe(selectedDevice);
+        expect(await page.getByLabel('Origen de telemetría', { exact: true }).inputValue()).toBe(
+          'demo',
+        );
+        const response = page.waitForResponse(
+          (res) => res.url().includes(`/plots/${plotId}/alerts?`) && res.status() === 200,
+        );
+        await page
+          .locator('app-offline-alerts-panel')
+          .getByRole('button', { name: 'Actualizar alertas', exact: true })
+          .click();
+        await response;
+        await page.evaluate(() => {
+          (document.activeElement as HTMLElement | null)?.blur();
+          window.scrollTo(0, 0);
+        });
+        await page.getByRole('link', { name: label, exact: true }).click();
+        await page.waitForFunction(
+          (id) => document.activeElement === document.getElementById(id),
+          fragment,
+        );
+        expect(new URL(page.url()).pathname).toBe(initial.pathname);
+        expect(documentRequests).toEqual([]);
+      } finally {
+        page.off('request', listener);
+      }
+    },
+  );
 
   it('FARMER ve rangos DEMO independientes, unidades y ausencia explícita sin formulario', async () => {
     await text('app-soil-sensor-card:nth-child(1) app-sensor-range', 'Mín. 0 %');
@@ -308,7 +467,9 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await text('.environment app-sensor-range', 'Mín. 18 °C');
     expect(await page.locator('app-sensor-range').count()).toBe(5);
     expect(await page.locator('.rain app-sensor-range').count()).toBe(0);
-    expect(await page.locator('input').count()).toBe(0);
+    expect(
+      await page.locator('app-sensor-range input, app-sensor-range-editor input').count(),
+    ).toBe(0);
     expect(await page.getByRole('button', { name: 'Configurar rango', exact: true }).count()).toBe(
       0,
     );
@@ -408,6 +569,17 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
 
   it('ADMIN propietario crea un rango desde móvil, valida y actualiza la tarjeta y auditoría', async () => {
     adminPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    adminPage.on('websocket', (socket) =>
+      socket.on('framereceived', ({ payload }) => {
+        const frame = payload.toString();
+        if (!frame.startsWith('42/telemetry,')) return;
+        const [name, value] = JSON.parse(frame.slice(frame.indexOf('['))) as [
+          string,
+          SensorStatusEvent,
+        ];
+        if (name === 'sensor.status') for (const listener of sensorListeners) listener(value);
+      }),
+    );
     adminPage.on('pageerror', (error) => errors.push(error.message));
     adminPage.on('response', (response) => {
       if (response.status() === 429) unexpectedRateLimits.push(new URL(response.url()).pathname);
@@ -711,7 +883,10 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
           response.url().includes(`/sensors/${adminSoilId}/thresholds/history?`) &&
           response.status() === 200,
       );
-      await adminPage.getByRole('button', { name, exact: true }).click();
+      await adminPage
+        .getByLabel('Intervalo histórico')
+        .getByRole('button', { name, exact: true })
+        .click();
       await refreshed;
       await chart.locator('line[data-version="4"]').first().waitFor({ state: 'attached' });
     }
@@ -989,6 +1164,328 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       path: join(directory, 'moisture-alert-mobile.png'),
       fullPage: true,
     });
+    expect(errors).toEqual([]);
+  });
+
+  it('sensor.status refresca rango cambiado fuera del navegador sin otra lectura ni recarga', async () => {
+    const db = app.get(PrismaService);
+    await db.device.update({ where: { id: adminDeviceId }, data: { expectedIntervalSeconds: 60 } });
+    const result = await fetch(`${apiUrl}/api/v1/iot/telemetry`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Device-Id': adminDeviceId,
+        'X-Device-Key': adminDeviceKey,
+      },
+      body: JSON.stringify({
+        schemaVersion: '1.2',
+        deviceId: adminDeviceId,
+        eventId: 'sensor-status-browser',
+        recordedAt: null,
+        soilMoisture: { soil_1: 0, soil_2: null, soil_3: 60 },
+        temperatureC: 25,
+        airHumidityPct: 70,
+        rainDetected: false,
+        valve: { relayCommandedOpen: false, feedbackOpen: null },
+      }),
+    });
+    expect(result.status).toBe(201);
+    await adminPage
+      .locator('app-soil-sensor-card')
+      .first()
+      .locator('[data-comparison="low"]')
+      .waitFor();
+    const before = await db.reading.count({ where: { deviceId: adminDeviceId } });
+    const current = await app.get(ThresholdService).get(adminSoilId, adminId);
+    const version = current.threshold!.version + 1;
+    const refreshed = adminPage.waitForResponse(
+      (r) => r.url().endsWith(`/sensors/${adminSoilId}/thresholds`) && r.status() === 200,
+    );
+    const status = waitForSensor(
+      (event) =>
+        event.deviceId === adminDeviceId &&
+        event.sensors.some(
+          (sensor) => sensor.sensorId === adminSoilId && sensor.rangeVersion === version,
+        ),
+    );
+    const [, event] = await Promise.all([
+      app.get(ThresholdService).put(adminSoilId, adminId, {
+        variable: 'SOIL_MOISTURE',
+        unit: 'PERCENT',
+        minValue: 0,
+        maxValue: 100,
+        expectedVersion: current.threshold!.version,
+      }),
+      status,
+      refreshed,
+    ]);
+    await adminPage
+      .locator('app-soil-sensor-card')
+      .first()
+      .locator('[data-comparison="within"]')
+      .waitFor({ timeout: 12000 });
+    expect(event).toMatchObject({ schemaVersion: '1.0', deviceId: adminDeviceId, source: 'demo' });
+    expect(event!.sensors.find((s) => s.code === 'soil_1')).toMatchObject({
+      quality: 'uncalibrated',
+      range: 'within',
+      rangeVersion: version,
+    });
+    expect(event!.sensors.find((s) => s.code === 'soil_2')).toMatchObject({
+      quality: 'missing',
+      range: null,
+    });
+    expect(await db.reading.count({ where: { deviceId: adminDeviceId } })).toBe(before);
+    expect(await adminPage.getByRole('button', { name: 'Salir', exact: true }).count()).toBe(1);
+    await adminPage.screenshot({
+      path: join(directory, 'sensor-status-mobile.png'),
+      fullPage: true,
+    });
+  });
+
+  it('fechas personalizadas filtran gráfico/tabla, conservan UTC al paginar y recuperan errores sin ocultar la última medición', async () => {
+    const db = app.get(PrismaService);
+    const bounds = await db.reading.aggregate({
+      where: { deviceId: adminDeviceId },
+      _min: { effectiveAt: true },
+      _max: { effectiveAt: true },
+    });
+    const from = new Date(
+      Math.floor(bounds._min.effectiveAt!.getTime() / 1000) * 1000 - 1000,
+    ).toISOString();
+    const to = new Date(
+      Math.ceil(bounds._max.effectiveAt!.getTime() / 1000) * 1000 + 1000,
+    ).toISOString();
+    const form = adminPage.getByRole('form', { name: 'Fechas del historial', exact: true });
+    const local = (iso: string) =>
+      adminPage.evaluate((value) => {
+        const date = new Date(value);
+        return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 19)
+          .replace(/:00$/, '');
+      }, iso);
+    const setFields = async (start: string, end: string) => {
+      await form
+        .getByLabel('Desde del historial (hora local)', { exact: true })
+        .fill(await local(start));
+      await form
+        .getByLabel('Hasta del historial (hora local)', { exact: true })
+        .fill(await local(end));
+    };
+    const response = (offset: number, start = from, end = to, status = 200) =>
+      adminPage.waitForResponse((r) => {
+        const url = new URL(r.url());
+        return (
+          url.pathname.endsWith('/readings') &&
+          url.searchParams.get('from') === start &&
+          url.searchParams.get('to') === end &&
+          url.searchParams.get('offset') === String(offset) &&
+          r.status() === status
+        );
+      });
+    await setFields(from, to);
+    const first = response(0);
+    await form.getByRole('button', { name: 'Aplicar fechas al historial', exact: true }).click();
+    const received = await first;
+    expect(new URL(received.url()).searchParams.get('source')).toBe('demo');
+    expect(new URL(received.url()).searchParams.get('deviceId')).toBe(adminDeviceId);
+    expect((await received.json()).total).toBeGreaterThan(100);
+    await adminPage
+      .locator('app-history-period')
+      .getByText('Periodo fijo:', { exact: false })
+      .waitFor();
+    const chart = adminPage.locator('app-soil-history-chart');
+    await chart.locator('svg').waitFor();
+    const second = response(100);
+    await adminPage.getByRole('button', { name: 'Más antiguas', exact: true }).click();
+    await second;
+    await chart.locator('svg').waitFor();
+    const refreshed = response(100);
+    await adminPage.getByRole('button', { name: 'Actualizar', exact: true }).click();
+    await refreshed;
+    await setFields('2026-01-01T00:00:00.000Z', '2026-03-01T00:00:00.000Z');
+    await form.getByRole('button', { name: 'Aplicar fechas al historial', exact: true }).click();
+    await adminPage.locator('app-history-period [role="alert"]').waitFor();
+    const emptyFrom = '2020-01-01T00:00:00.000Z',
+      emptyTo = '2020-01-02T00:00:00.000Z';
+    await setFields(emptyFrom, emptyTo);
+    const empty = response(0, emptyFrom, emptyTo);
+    await form.getByRole('button', { name: 'Aplicar fechas al historial', exact: true }).click();
+    await empty;
+    await chart.getByText('Sin lecturas en este intervalo.', { exact: true }).waitFor();
+    expect(
+      await adminPage.locator('app-soil-sensor-card').first().locator('strong').textContent(),
+    ).toContain('0');
+    expect(
+      await adminPage.getByRole('button', { name: 'Más antiguas', exact: true }).isDisabled(),
+    ).toBe(true);
+    const fail = '**/api/v1/plots/*/readings?*';
+    await adminPage.route(fail, (route) =>
+      route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+    );
+    try {
+      const failed = response(0, emptyFrom, emptyTo, 503);
+      await form.getByRole('button', { name: 'Aplicar fechas al historial', exact: true }).click();
+      await failed;
+      await chart.getByText('Historial no disponible.', { exact: false }).waitFor();
+      expect(
+        await chart.getByText('Sin lecturas en este intervalo.', { exact: true }).count(),
+      ).toBe(0);
+    } finally {
+      await adminPage.unroute(fail);
+    }
+    const retry = response(0, emptyFrom, emptyTo);
+    await adminPage.getByRole('button', { name: 'Actualizar', exact: true }).click();
+    await retry;
+    await chart.getByText('Sin lecturas en este intervalo.', { exact: true }).waitFor();
+    await adminPage.setViewportSize({ width: 390, height: 844 });
+    expect(await adminPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await adminPage.screenshot({
+      path: join(directory, 'history-period-mobile.png'),
+      fullPage: true,
+    });
+    await adminPage
+      .getByLabel('Intervalo histórico')
+      .getByRole('button', { name: '24 h', exact: true })
+      .click();
+    await chart.locator('svg').waitFor();
+  });
+
+  it('renueva antes de quince minutos, reautentica Socket.IO, recupera recarga y revoca al salir', async () => {
+    const context = await browser.newContext();
+    const sessionPage = await context.newPage();
+    try {
+      await sessionPage.clock.install();
+      await sessionPage.goto(`${frontendUrl}/login`);
+      await sessionPage.locator('#email').fill('browser@example.test');
+      await sessionPage.locator('#password').fill(password);
+      await sessionPage.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
+      await sessionPage.getByRole('link', { name: 'Abrir panel de monitoreo' }).click();
+      await sessionPage.getByLabel('Origen de telemetría', { exact: true }).selectOption('demo');
+      await sessionPage.waitForFunction(() =>
+        document.querySelector('main')?.textContent?.includes('Canal en vivo: Conectado'),
+      );
+      const cookies = await context.cookies(`${frontendUrl}/api/v1/auth`);
+      const cookie = cookies.find((item) => item.name === 'cacaosmart_session');
+      expect(cookie?.httpOnly).toBe(true);
+      expect(cookie?.sameSite).toBe('Strict');
+      expect(await sessionPage.evaluate(() => document.cookie.includes('cacaosmart_session'))).toBe(
+        false,
+      );
+      const refreshed = sessionPage.waitForResponse(
+        (r) => r.url().endsWith('/auth/refresh') && r.status() === 200,
+      );
+      const reconnected = sessionPage.waitForEvent('websocket');
+      await sessionPage.clock.fastForward(840000);
+      await refreshed;
+      await reconnected;
+      await sessionPage.clock.fastForward(61000);
+      await sessionPage.waitForFunction(() =>
+        document.querySelector('main')?.textContent?.includes('Canal en vivo: Conectado'),
+      );
+      expect(await sessionPage.getByRole('button', { name: 'Salir', exact: true }).count()).toBe(1);
+      const restored = sessionPage.waitForResponse(
+        (r) => r.url().endsWith('/auth/refresh') && r.status() === 200,
+      );
+      await sessionPage.reload();
+      await restored;
+      await sessionPage.getByRole('button', { name: 'Salir', exact: true }).waitFor();
+      const closed = sessionPage.waitForResponse(
+        (r) => r.url().endsWith('/auth/logout') && r.status() === 204,
+      );
+      await sessionPage.getByRole('button', { name: 'Salir', exact: true }).click();
+      await closed;
+      await sessionPage.waitForURL((url) => url.pathname === '/login');
+      await sessionPage.reload();
+      await sessionPage.locator('#email').waitFor();
+      expect(
+        (await context.cookies(`${frontendUrl}/api/v1/auth`)).some(
+          (item) => item.name === 'cacaosmart_session',
+        ),
+      ).toBe(false);
+    } finally {
+      await context.close();
+    }
+  }, 45000);
+
+  it('FARMER crea parcela propia desde móvil sin dispositivos ni datos inventados', async () => {
+    await page.getByRole('link', { name: 'Parcelas', exact: true }).click();
+    await page.getByRole('heading', { name: 'Registrar una parcela propia' }).waitFor();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByLabel('Nombre', { exact: true }).fill('Cacao · Alta FARMER');
+    await page.getByLabel('Ubicación', { exact: true }).fill('Chone · prueba');
+    await page.getByLabel('Superficie en m² (opcional)', { exact: true }).fill('1200');
+    const result = page.waitForResponse(
+      (r) => r.url().endsWith('/api/v1/plots') && r.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Crear parcela', exact: true }).click();
+    const response = await result;
+    expect(response.status()).toBe(201);
+    const created = (await response.json()) as { id: string; ownerId: string };
+    const db = app.get(PrismaService);
+    const owner = await db.user.findUniqueOrThrow({ where: { email: 'browser@example.test' } });
+    expect(created.ownerId).toBe(owner.id);
+    expect(owner.role).toBe('FARMER');
+    expect(await db.device.count({ where: { plotId: created.id } })).toBe(0);
+    await text('main', 'Parcela creada');
+    const card = page
+      .locator('article')
+      .filter({ has: page.getByRole('heading', { name: 'Cacao · Alta FARMER', exact: true }) });
+    await card.waitFor();
+    expect((await db.plot.findUniqueOrThrow({ where: { id: created.id } })).areaM2).toBe(1200);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: join(directory, 'farmer-create-plot-mobile.png'),
+      fullPage: true,
+    });
+    await card.getByRole('link', { name: 'Abrir panel de monitoreo' }).click();
+    await text('main', 'No hay dispositivos disponibles');
+    expect(errors).toEqual([]);
+  });
+  it('barra lateral permanece visible al bajar en escritorio y permite recorrer el menú en pantalla baja', async () => {
+    const checkSticky = async (selector: string) => {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const before = await page.locator(selector).boundingBox();
+      expect(before).not.toBeNull();
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+      const after = await page.locator(selector).boundingBox();
+      expect(after).not.toBeNull();
+      expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
+      // Layout/scroll coordinates can differ by a fractional CSS pixel in Chromium.
+      expect(after!.y).toBeGreaterThanOrEqual(-1);
+      expect(after!.height).toBeLessThanOrEqual(501);
+    };
+    await page.setViewportSize({ width: 1440, height: 500 });
+    await checkSticky('.sidebar');
+    await page.locator('.sidebar').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    const technical = page.locator('.sidebar-footer a');
+    await technical.scrollIntoViewIfNeeded();
+    const link = await technical.boundingBox();
+    expect(link).not.toBeNull();
+    expect(link!.y).toBeGreaterThanOrEqual(-1);
+    expect(link!.y + link!.height).toBeLessThanOrEqual(501);
+    await page.screenshot({
+      path: join(directory, 'sticky-dashboard-desktop.png'),
+      fullPage: false,
+    });
+    await page.getByRole('link', { name: 'Parcelas', exact: true }).click();
+    await page.getByRole('heading', { name: 'Registrar una parcela propia' }).waitFor();
+    await checkSticky('aside');
+    await page.screenshot({ path: join(directory, 'sticky-plots-desktop.png'), fullPage: false });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.locator('aside').evaluate((element) => getComputedStyle(element).position),
+    ).toBe('static');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
     expect(errors).toEqual([]);
   });
 });

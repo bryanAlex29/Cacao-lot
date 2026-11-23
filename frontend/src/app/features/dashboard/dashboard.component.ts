@@ -34,6 +34,9 @@ import { SensorRangeEditorComponent } from './sensor-range-editor.component';
 import { SensorAssessmentComponent } from './sensor-assessment.component';
 import { assessSensor } from '../../core/sensor-thresholds/sensor-assessment';
 import { ThresholdHistoryFacade } from '../../core/sensor-thresholds/threshold-history.facade';
+import { IrrigationHistoryComponent } from './irrigation-history.component';
+import { ReportsPanelComponent } from './reports-panel.component';
+import { HistoryPeriodComponent } from './history-period.component';
 
 interface DeviceOption {
   id: string;
@@ -58,6 +61,9 @@ interface DeviceOption {
     SensorRangeComponent,
     SensorRangeEditorComponent,
     SensorAssessmentComponent,
+    IrrigationHistoryComponent,
+    ReportsPanelComponent,
+    HistoryPeriodComponent,
   ],
   providers: [TelemetryFacade, SensorThresholdsFacade, ThresholdHistoryFacade],
   templateUrl: './dashboard.component.html',
@@ -156,6 +162,9 @@ export class DashboardComponent implements OnInit {
     });
     effect(() => {
       if (this.telemetry.stream() === 'connected') this.thresholds.reload();
+    });
+    effect(() => {
+      if (this.telemetry.sensorRefresh() > 0) untracked(() => this.thresholds.reload());
     });
     effect(() => {
       const device = this.options().find((option) => option.id === this.selected());
@@ -277,6 +286,18 @@ export class DashboardComponent implements OnInit {
   scrollToAlerts(): void {
     // Scroll even when the URL already has this fragment (same-URL router navigation is ignored).
     this.viewportScroller.scrollToAnchor('alerts');
+  }
+  scrollToReadings(): void {
+    this.viewportScroller.scrollToAnchor('readings');
+  }
+  scrollToHistory(): void {
+    this.viewportScroller.scrollToAnchor('history');
+  }
+  scrollToIrrigation(): void {
+    this.viewportScroller.scrollToAnchor('irrigation-history');
+  }
+  scrollToReports(): void {
+    this.viewportScroller.scrollToAnchor('reports');
   }
   configureRange(code: QuantitativeSensorCode, label: string): void {
     if (this.auth.user()?.role !== 'ADMIN') return;

@@ -210,6 +210,15 @@ article p,
 .skip-link:focus {
   top: 12px;
 }
+@media (min-width: 681px) {
+  aside {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+}
 @media (max-width: 1050px) {
   .workspace {
     grid-template-columns: 210px minmax(0, 1fr);

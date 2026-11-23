@@ -473,6 +473,15 @@ label {
 .skip-link:focus {
   top: 12px;
 }
+@media (min-width: 901px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+}
 @media (min-width: 1600px) {
   .workspace {
     grid-template-columns: 260px minmax(0, 1fr);

@@ -9,6 +9,8 @@ import { PasswordService } from './password.service';
 import type { AuthenticatedUser } from './auth.types';
 import { LoginDto, LoginResponseDto, RegisterDto } from './auth.dto';
 import { UsersService } from '../users/users.service';
+import { BrowserSessionService } from './browser-session.service';
+import type { SessionRequest } from './browser-session.service';
 
 export const TOKEN_ISSUER = 'cacaosmart-api';
 export const TOKEN_AUDIENCE = 'cacaosmart-web';
@@ -22,9 +24,10 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Environment, true>,
     private readonly accounts: UsersService,
+    private readonly sessions: BrowserSessionService,
   ) {}
 
-  async login(input: LoginDto): Promise<LoginResponseDto> {
+  async login(input: LoginDto) {
     const account = await this.users.findForLogin(input.email);
     const valid = await this.passwords.verify(account?.passwordHash, input.password);
     if (!valid || !account?.isActive) throw new UnauthorizedException('Credenciales incorrectas');
@@ -34,29 +37,47 @@ export class AuthService {
       email: account.email,
       role: account.role,
     };
-    return this.issueSession(user);
+    const session = await this.sessions.create(user.id);
+    return { ...session, body: await this.issueSession(user, session.id, session.expiresAt) };
   }
 
-  async register(input: RegisterDto): Promise<LoginResponseDto> {
+  async register(input: RegisterDto) {
     // Reutiliza alta segura: rol FARMER fijado en servidor, hash Argon2id y unicidad.
     const user = await this.accounts.create(input);
-    return this.issueSession(user);
+    const session = await this.sessions.create(user.id);
+    return { ...session, body: await this.issueSession(user, session.id, session.expiresAt) };
   }
 
-  private async issueSession(user: AuthenticatedUser): Promise<LoginResponseDto> {
+  async refresh(req: SessionRequest) {
+    const session = await this.sessions.refresh(req);
+    return {
+      ...session,
+      body: await this.issueSession(session.user, session.id, session.expiresAt),
+    };
+  }
+
+  private async issueSession(
+    user: AuthenticatedUser,
+    sessionId: string,
+    expiresAt: Date,
+  ): Promise<LoginResponseDto> {
+    const expiresIn = Math.max(
+      1,
+      Math.min(TOKEN_SECONDS, Math.floor((expiresAt.getTime() - Date.now()) / 1000)),
+    );
     const accessToken = await this.jwt.signAsync(
-      {},
+      { sid: sessionId },
       {
         secret: this.config.get('JWT_SECRET', { infer: true }),
         algorithm: 'HS256',
         subject: user.id,
         issuer: TOKEN_ISSUER,
         audience: TOKEN_AUDIENCE,
-        expiresIn: TOKEN_SECONDS,
+        expiresIn,
         jwtid: randomUUID(),
       },
     );
-    return { accessToken, tokenType: 'Bearer', expiresIn: TOKEN_SECONDS, user };
+    return { accessToken, tokenType: 'Bearer', expiresIn, user };
   }
 
   async authenticate(token: string): Promise<AuthenticatedUser> {
@@ -81,6 +102,11 @@ export class AuthService {
     // El rol y el estado activo se consultan en base; no se confía en un rol del JWT.
     const user = await this.users.findActive(claims['sub'] as string);
     if (!user) throw new UnauthorizedException('Sesión inválida o caducada');
+    if (
+      claims['sid'] !== undefined &&
+      (typeof claims['sid'] !== 'string' || !(await this.sessions.active(claims['sid'], user.id)))
+    )
+      throw new UnauthorizedException('Sesión inválida o caducada');
     return user;
   }
 }

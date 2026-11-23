@@ -73,7 +73,15 @@ export function chartSegments(
   standalone: true,
   imports: [DatePipe, DecimalPipe],
   template: `@if (!readings().length) {
-      <p class="empty">Sin lecturas en este intervalo.</p>
+      <p class="empty">
+        {{
+          loading()
+            ? 'Consultando historial…'
+            : failed()
+              ? 'Historial no disponible. Revisa el error y vuelve a intentarlo.'
+              : 'Sin lecturas en este intervalo.'
+        }}
+      </p>
     } @else {
       <svg
         viewBox="0 0 700 250"
@@ -305,6 +313,8 @@ export function chartSegments(
 })
 export class SoilHistoryChartComponent {
   readonly readings = input<TelemetryReading[]>([]);
+  readonly loading = input(false);
+  readonly failed = input(false);
   readonly intervalSeconds = input(60);
   readonly thresholds = input<ThresholdHistoryMap>(historyStates('idle'));
   readonly source = input<DataSource>('real');

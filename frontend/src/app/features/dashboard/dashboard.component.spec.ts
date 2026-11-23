@@ -62,6 +62,10 @@ describe('Dashboard de tres zonas', () => {
       stream: signal('connecting'),
       error: signal(''),
       days: signal(1),
+      period: signal(null),
+      setPeriod: vi.fn(),
+      irrigationRefresh: signal(0),
+      sensorRefresh: signal(0),
       offset: signal(0),
       readingStale: signal(true),
     };
@@ -143,24 +147,28 @@ describe('Dashboard de tres zonas', () => {
       source: 'real',
     });
   });
-  it('Alertas usa navegación Angular y desplaza el panel sin recargar ni cerrar sesión', async () => {
-    const { fixture, component } = await setup();
-    const scroll = vi
-      .spyOn(TestBed.inject(ViewportScroller), 'scrollToAnchor')
-      .mockImplementation(() => undefined);
-    const link = fixture.debugElement.query(By.css('nav a[fragment="alerts"]'));
-    expect(link.injector.get(RouterLink).fragment).toBe('alerts');
-    const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
-    link.nativeElement.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
-    expect(scroll).toHaveBeenCalledWith('alerts');
-    expect(component.selected()).toBe('device-0');
-    expect(TestBed.inject(AuthService).logout).not.toHaveBeenCalled();
-    link.nativeElement.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
-    );
-    expect(scroll).toHaveBeenCalledTimes(2);
-  });
+  it.each(['alerts', 'readings', 'history'])(
+    '%s usa navegación Angular y desplaza el panel sin recargar ni cerrar sesión',
+    async (fragment) => {
+      const { fixture, component } = await setup();
+      const scroll = vi
+        .spyOn(TestBed.inject(ViewportScroller), 'scrollToAnchor')
+        .mockImplementation(() => undefined);
+      const link = fixture.debugElement.query(By.css(`nav a[fragment="${fragment}"]`));
+      expect(link.injector.get(RouterLink).fragment).toBe(fragment);
+      expect(link.injector.get(RouterLink).queryParamsHandling).toBe('preserve');
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      link.nativeElement.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(scroll).toHaveBeenCalledWith(fragment);
+      expect(component.selected()).toBe('device-0');
+      expect(TestBed.inject(AuthService).logout).not.toHaveBeenCalled();
+      link.nativeElement.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+      );
+      expect(scroll).toHaveBeenCalledTimes(2);
+    },
+  );
   it('origen DEMO permanece explícito y no toma un dispositivo real', async () => {
     const { component, fixture, facade } = await setup();
     facade.select.mockClear();
@@ -169,6 +177,15 @@ describe('Dashboard de tres zonas', () => {
     expect(fixture.nativeElement.textContent).toContain('DEMO · Datos simulados');
     expect(component.selected()).toBe('');
     expect(facade.select).not.toHaveBeenCalled();
+  });
+  it('invalidación de sensores refresca rangos sin aplicar estados del socket', async () => {
+    const { fixture, facade, thresholds } = await setup();
+    thresholds.reload.mockClear();
+    facade.sensorRefresh.set(1);
+    fixture.detectChanges();
+    expect(thresholds.reload).toHaveBeenCalledTimes(1);
+    fixture.detectChanges();
+    expect(thresholds.reload).toHaveBeenCalledTimes(1);
   });
   it('enlace de parcela tiene selección explícita y logout limpia telemetría', async () => {
     const { component, facade, thresholds } = await setup();
@@ -227,7 +244,9 @@ describe('Dashboard de tres zonas', () => {
     expect(element.textContent).not.toContain('Normal');
     expect(element.querySelectorAll('app-sensor-range')).toHaveLength(5);
     expect(element.querySelector('.rain app-sensor-range')).toBeNull();
-    expect(element.querySelectorAll('input')).toHaveLength(0);
+    expect(
+      element.querySelectorAll('app-sensor-range input, app-sensor-range-editor input'),
+    ).toHaveLength(0);
   });
 
   it('reintenta rangos sin recargar telemetría y Actualizar consulta ambos', async () => {

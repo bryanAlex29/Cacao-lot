@@ -1,4 +1,4 @@
-import { Component, DestroyRef, effect, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, OnInit, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
@@ -16,6 +16,10 @@ import { AuthService } from '../../core/auth/auth.service';
 })
 export class PlotsComponent implements OnInit {
   readonly auth = inject(AuthService);
+  readonly canCreate = computed(() => {
+    const role = this.auth.user()?.role;
+    return role === 'ADMIN' || role === 'FARMER';
+  });
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -25,6 +29,7 @@ export class PlotsComponent implements OnInit {
   readonly busy = signal(false);
   readonly saving = signal(false);
   readonly error = signal('');
+  readonly message = signal('');
   readonly form = inject(FormBuilder).nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(100)]],
     locationLabel: ['', [Validators.required, Validators.maxLength(200)]],
@@ -68,7 +73,8 @@ export class PlotsComponent implements OnInit {
   }
 
   create(): void {
-    if (this.saving() || this.busy() || this.auth.user()?.role !== 'ADMIN') return;
+    if (this.saving() || this.busy() || !this.canCreate()) return;
+    this.message.set('');
     this.form.markAllAsTouched();
     if (this.form.invalid) return;
     const value = this.form.getRawValue();
@@ -88,6 +94,7 @@ export class PlotsComponent implements OnInit {
         next: () => {
           this.form.reset();
           this.saving.set(false);
+          this.message.set('Parcela creada. No contiene dispositivos ni mediciones todavía.');
           this.load(0);
         },
         error: (error: unknown) => {

@@ -37,8 +37,11 @@ export class PlotsController {
   }
 
   @Post()
-  @Roles(UserRole.ADMIN)
-  @ApiCreatedResponse({ type: PlotResponseDto })
+  @Roles(UserRole.ADMIN, UserRole.FARMER)
+  @ApiCreatedResponse({
+    type: PlotResponseDto,
+    description: 'ADMIN o FARMER crea una parcela propia; propietario obtenido de la sesión',
+  })
   create(@CurrentUser() user: AuthenticatedUser, @Body() input: CreatePlotDto) {
     return this.plots.create(user.id, input);
   }

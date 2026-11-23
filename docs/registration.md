@@ -6,9 +6,9 @@ Extensión autorizada por el usuario después de la fase 2. Sustituye únicament
 
 1. Abrir <http://localhost:4200/login> y pulsar **Crear cuenta de agricultor**, o entrar en <http://localhost:4200/registro>.
 2. Completar nombre, correo, contraseña y confirmación. La contraseña debe tener entre 8 y 128 caracteres, al menos una mayúscula y un símbolo. Los espacios y los números no cuentan como símbolo; no es obligatorio incluir dígitos.
-3. Pulsar **Crear cuenta**. Tras guardarse, se inicia una sesión en memoria de hasta 15 minutos y se navega a `/parcelas`.
+3. Pulsar **Crear cuenta**. Tras guardarse, se navega a `/parcelas` con JWT en memoria de hasta 15 minutos y [sesión renovable mediante cookie HttpOnly](session-renewal.md), máximo absoluto 8 horas.
 
-Las parcelas no se asignan ni se inventan al registrarse. Una cuenta nueva verá la lista vacía hasta que exista un flujo autorizado de provisión de sus recursos. No se amplían los permisos de FARMER para resolver esa ausencia.
+Las parcelas no se asignan ni se inventan al registrarse. Una cuenta nueva comienza con lista vacía. **Actualización autorizada 2026-11-22:** FARMER puede crear sus parcelas desde Mis parcelas con nombre, ubicación y superficie opcional; dueño derivado de sesión. Esto no habilita editar/archivar parcelas, provisionar dispositivos ni configurar rangos.
 
 ## API
 

@@ -77,6 +77,7 @@ describe('Pantalla de base técnica', () => {
     expect(auth.accessToken()).toBe('test-only-token');
     expect(auth.user()?.id).toBe('test-user');
     auth.logout();
+    http.expectOne('/api/v1/auth/logout').flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
     expect(element.querySelector('.return-link')).toBeNull();
     expect(element.querySelector('a.phase')).not.toBeNull();

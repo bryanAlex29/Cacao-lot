@@ -94,6 +94,21 @@ describe('Segmentos mínimo/máximo por vigencia', () => {
 
 describe('Gráfico y tabla accesible sin alterar las lecturas', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('distingue consulta pendiente, fallo y periodo realmente vacío', () => {
+    const fixture = TestBed.createComponent(SoilHistoryChartComponent);
+    fixture.componentRef.setInput('loading', true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Consultando historial');
+    expect(fixture.nativeElement.textContent).not.toContain('Sin lecturas en este intervalo.');
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('failed', true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Historial no disponible');
+    expect(fixture.nativeElement.textContent).not.toContain('Sin lecturas en este intervalo.');
+    fixture.componentRef.setInput('failed', false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Sin lecturas en este intervalo.');
+  });
   function setup() {
     TestBed.configureTestingModule({ imports: [SoilHistoryChartComponent] });
     const fixture = TestBed.createComponent(SoilHistoryChartComponent);

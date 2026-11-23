@@ -2,7 +2,9 @@
 
 Monitoreo y riego inteligente para cacao en Chone, Manabí, Ecuador. Proyecto TerriTech Hackathon CITIC 2026.
 
-## Estado actual: fase 5.7 (baja humedad por sonda)
+## Estado actual: fase 5.12 (fechas personalizadas del histórico)
+
+**Corrección de sesión:** ya no se expulsa al usuario al vencer el primer JWT de 15 minutos. Renovación automática mediante cookie HttpOnly y sesión revocable, máximo absoluto 8 horas; también recupera una recarga. **Iniciar sesión una vez tras actualizar** para activar la cookie nueva. Ver [seguridad, límites y prueba manual](docs/session-renewal.md).
 
 Base ejecutable con **Angular + NestJS + PostgreSQL/Prisma**, registro, parcelas propias y **dashboard de telemetría en vivo** con tres zonas. La pantalla pública `/estado` comprueba salud real de API/PostgreSQL. Hay alertas persistentes de desconexión y baja humedad por sonda; la migración de humedad fue verificada en bases temporales y aplicada localmente con autorización, preservando datos anteriores. IA y métricas hídricas siguen pendientes, sin resultados inventados.
 
@@ -12,6 +14,16 @@ Fase 5: **rangos min/max por UUID de sensor**, con permisos por propietario, aud
 
 **Baja humedad (5.7):** tres lecturas consecutivas bajo el mínimo por A/B/C; recuperación con tres ≥ mínimo + margen positivo configurado, sin defaults. Datos inválidos/ausentes/antiguos rompen confirmaciones sin resolver; reales sin calibrar no cuentan. Cambio de rango/margen cierra por configuración, no recuperación. Panel/configuración ADMIN y reconocimiento propietario independientes del riego. **Migración aplicada localmente; configurar el margen de cada sonda explícitamente para habilitarla.** Ver [fase 5.7](docs/phase-5-7.md).
 
+**Riego observado (5.8):** historial paginado del relé y feedback físico derivado de telemetría persistida, sin migración. Menú **Riego → Consultar / actualizar historial**, filtros 24 h/7/30 días y estados anteriores/actuales separados por real/DEMO. Null no significa cierre; no se infieren duración, caudal ni litros. Ver [fase 5.8 y prueba manual](docs/phase-5-8.md) y [comparación completa con DERCAS](docs/requirements-status.md).
+
+**Reportes CSV (5.9):** menú **Reportes** dentro del dashboard, descarga de lecturas o cambios observados de riego, fechas personalizadas o 24 h/7/30 días. Solo dispositivo/origen/parcela autorizados, ADMIN/FARMER; UTC, calidad y null explícitos. Máximo 31 días/10000 registros, error sin truncar si se excede. Sin cifras hídricas inventadas ni migración. Ver [fase 5.9 y prueba manual](docs/phase-5-9.md).
+
+**Riego en tiempo real (5.10):** evento independiente `irrigation.updated` tras guardar una primera observación o cambio que queda como último. Después de **Riego → Consultar / actualizar historial**, la tabla se refresca por REST al recibir cambios o reconectar; no aplica estados de mensajes atrasados. Sin nuevas lecturas no aparecen cambios. No inicia el simulador ni acredita flujo físico. Ver [fase 5.10 y prueba manual](docs/phase-5-10.md).
+
+**Estado de sensores (5.11):** evento separado `sensor.status` v1.0 con identidad, calidad, antigüedad y comparación numérica por sensor, derivado de la última lectura y rangos persistidos. Una sonda sin datos no desconecta las demás. Al cambiar el estado, Angular recupera mediciones/rangos por REST, también si un rango se cambió desde otra sesión. Sin calibración o rango no se inventan. No crea nuevas alertas ni inicia el simulador. Ver [contrato, límites y prueba manual de 5.11](docs/phase-5-11.md).
+
+**Fechas del histórico (5.12):** menú **Historial → Desde/Hasta → Aplicar fechas al historial** filtra el gráfico A/B/C y su tabla, máximo 31 días. Hora local convertida a UTC y periodo fijo al paginar/actualizar/reconectar; presets 24 h/7/30 días siguen siendo móviles. No filtra las tarjetas actuales ni modifica los filtros de riego o reportes. Historial ya conserva la sesión al navegar. Ver [fase 5.12 y prueba manual](docs/phase-5-12.md).
+
 - Angular standalone, Router, HttpClient y detección de cambios sin Zone.js.
 - API NestJS con entorno validado, CORS restringido, validación global y OpenAPI en desarrollo.
 - PostgreSQL en Docker Compose aislado del resto de proyectos.
@@ -20,13 +32,15 @@ Fase 5: **rangos min/max por UUID de sensor**, con permisos por propietario, aud
 - Registro de dispositivos con clave aleatoria visible una vez y seis sensores en una operación atómica; ingesta autenticada, idempotente y transaccional.
 - Snapshot e histórico REST por propietario, origen y dispositivo; simulador local determinista de tres sondas.
 - Socket.IO con JWT y permisos por parcela/dispositivo/origen, reconexión y recuperación REST.
-- Angular: `/login`, `/registro` público, `/parcelas` protegido (listado y creación propia para ADMIN) y `/estado` público.
+- Angular: `/login`, `/registro` público, `/parcelas` protegido (listado y creación propia para ADMIN/FARMER) y `/estado` público.
 - Tipos compartidos de telemetría y puertos para desacoplar fuentes demo/reales.
 - Pruebas de configuración, salud HTTP y presentación de disponibilidad.
 
 No hay análisis IA, predicción ni control remoto de válvula implementados. El recorrido completo hasta Angular está probado con simulador, **no con ESP32 real**. Gestión de dispositivos y altas de agricultores disponibles mediante API, no mediante formularios Angular todavía. No desplegar esta base como producto terminado.
 
 ## Especificaciones
+
+- [Resumen de entrega y guía para que el compañero continúe](docs/CONTINUAR.md).
 
 - [Entrada para agentes](AGENTS.md).
 - [Instrucciones de desarrollo](AGENTS_CacaoSmart_v1.4.md).
@@ -44,6 +58,12 @@ No hay análisis IA, predicción ni control remoto de válvula implementados. El
 - [Límites históricos de A/B/C por vigencia de fase 5.5](docs/phase-5-5.md).
 - [Alertas persistentes de desconexión y reconocimiento de fase 5.6](docs/phase-5-6.md).
 - [Baja humedad por sonda, margen y reconocimiento de fase 5.7](docs/phase-5-7.md).
+- [Historial de riego observado de fase 5.8](docs/phase-5-8.md).
+- [Reportes CSV de telemetría y riego observado de fase 5.9](docs/phase-5-9.md).
+- [Evento de riego y refresco REST del historial de fase 5.10](docs/phase-5-10.md).
+- [Estado independiente de sensores y refresco REST de fase 5.11](docs/phase-5-11.md).
+- [Fechas personalizadas del gráfico y tabla de humedad de fase 5.12](docs/phase-5-12.md).
+- [Comparación de implementación y pendientes frente a DERCAS](docs/requirements-status.md).
 - [Guía para colaboradores](CONTRIBUTING.md).
 - [Estado y siguiente tarea para retomar el desarrollo](docs/HANDOFF.md).
 
@@ -138,6 +158,8 @@ El registro público solo crea `FARMER`, no acepta roles ni propietarios del cli
 
 ## Crear el primer administrador local (solo administración)
 
+**Los agricultores ya pueden crear parcelas propias:** en **Mis parcelas**, completar nombre, ubicación y superficie opcional y pulsar **Crear parcela**. No hace falta cambiar a ADMIN. La parcela nueva comienza sin dispositivos ni mediciones; editar/archivar parcelas y provisionar dispositivos siguen reservados a ADMIN propietario. Ver [alcance y prueba manual](docs/farmer-plots.md).
+
 No existen usuarios ni contraseñas predeterminados. Tras aplicar la migración:
 
 1. Editar **el `.env` local ignorado por Git**, sin compartirlo, y añadir `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL` y `BOOTSTRAP_ADMIN_PASSWORD` con los datos elegidos. Usar una contraseña única de 8–128 caracteres con al menos una mayúscula y un símbolo; no pegarla en el chat ni escribirla en comandos que queden en el historial. Usar comillas si contiene espacios o caracteres especiales de dotenv.
@@ -150,11 +172,11 @@ La CLI solo admite desarrollo con PostgreSQL local, guarda Argon2id y no imprime
 ### Política de acceso inicial
 
 - ADMIN: crea agricultores y gestiona únicamente sus propias parcelas/dispositivos. Ser ADMIN **no** permite leer parcelas ajenas.
-- FARMER: consulta sus parcelas y dispositivos; no los modifica.
+- FARMER: crea parcelas propias y consulta sus parcelas/dispositivos. No edita/archiva parcelas ni modifica dispositivos o rangos.
 - El propietario de nuevas parcelas se obtiene del JWT validado, nunca de un `ownerId` enviado por el cliente.
 - Hay registro público solo de FARMER, autorizado por solicitud posterior del usuario. No hay alta de ADMIN por HTTP, transferencia de propiedad ni bypass global. La provisión/asignación de parcelas para agricultores requiere un flujo administrativo explícito pendiente; no asignar recursos silenciosamente ni editar IDs para simular permisos.
 
-La sesión Angular vive solo en memoria: recargar la página o cerrar sesión elimina el token del cliente. El JWT expira en 15 minutos, sin refresh ni revocación individual inmediata al salir. En cada solicitud el backend vuelve a comprobar usuario activo y rol. Antes de producción se deben definir recuperación de contraseña, revocación y administración completa.
+El JWT Angular vive solo en memoria y dura hasta 15 minutos, pero se renueva automáticamente mediante una cookie HttpOnly/Strict, con máximo absoluto de sesión de 8 horas. Recargar recupera una sesión válida; Salir revoca la sesión vinculada en el servidor. No se guardan contraseñas ni tokens en localStorage/sessionStorage. API y Socket.IO revalidan usuario, rol y sesión. Usar el origen frontend configurado (localmente localhost:4200); antes de producción revisar HTTPS, recuperación, retención y administración completa. Ver [renovación de sesión](docs/session-renewal.md).
 
 La tabla de endpoints, paginación y manejo de claves de dispositivo está en [fase 2](docs/phase-2.md) y Swagger. Mantener privadas las respuestas de login y de creación de dispositivo: contienen secretos de sesión o provisión.
 
@@ -253,6 +275,6 @@ El paquete de contratos solo contiene tipos: la validación HTTP se hace en los 
 
 La auditoría de dependencias conserva avisos, registrados en [fase 1](docs/phase-1.md). No se aplicó `npm audit fix --force`, no se desactivó la auditoría y no se considera el proyecto listo para producción. Revisar dependencias antes de publicar o desplegar.
 
-La edición ADMIN, clasificación numérica, límites históricos por vigencia y alertas de desconexión/baja humedad están implementadas, con migraciones locales aplicadas. Falta configurar márgenes explícitos por sonda; no se inventan automáticamente. Cualquier incremento posterior requiere autorización; eventos de riego, reportes, diagnóstico IA y clima/predicción siguen pendientes. Todo el alcance de DERCAS se conserva. Resolver el flujo de asignación de parcelas antes de usarlo en campo. Ver [fase 5.7](docs/phase-5-7.md), [fase 5.6](docs/phase-5-6.md) y [histórico](docs/phase-5-5.md).
+La edición ADMIN, clasificación numérica, límites históricos por vigencia, alertas de desconexión/baja humedad, historial de riego, CSV, eventos separados y fechas personalizadas del gráfico/tabla de humedad están implementados. Falta configurar márgenes explícitos por sonda; no se inventan automáticamente. Cualquier incremento posterior requiere autorización; gestión administrativa completa, fechas personalizadas del historial de riego, diagnóstico IA y clima/predicción siguen pendientes. Todo el alcance de DERCAS se conserva. Resolver el flujo de asignación de parcelas antes de usarlo en campo. Ver [comparación de requisitos](docs/requirements-status.md).
 
 El ESP32 mantiene el control local del riego. Sin calibración, caudal o línea base no se afirmarán litros, ahorro ni umbrales válidos. La IA será orientativa y nunca controlará la válvula.

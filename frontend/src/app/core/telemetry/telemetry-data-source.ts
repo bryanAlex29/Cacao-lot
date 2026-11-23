@@ -8,11 +8,15 @@ import type {
   TelemetrySubscription,
   TelemetryUpdatedEvent,
   DeviceStatusEvent,
+  IrrigationUpdatedEvent,
+  SensorStatusEvent,
 } from '@cacaosmart/contracts';
 
 export type TelemetryStream =
   | { kind: 'connected' | 'disconnected' | 'error' }
   | { kind: 'reading'; event: TelemetryUpdatedEvent }
+  | { kind: 'irrigation'; event: IrrigationUpdatedEvent }
+  | { kind: 'sensor'; event: SensorStatusEvent }
   | { kind: 'status'; event: DeviceStatusEvent };
 
 /** Ambos orígenes usan la API autorizada; demo nunca genera datos en el navegador. */

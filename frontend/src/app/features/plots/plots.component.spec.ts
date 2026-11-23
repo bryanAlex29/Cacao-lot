@@ -31,24 +31,64 @@ describe('Parcelas propias', () => {
     return { fixture, http, component: fixture.componentInstance };
   }
 
-  it('muestra vacío sin fabricar parcelas y oculta escritura para FARMER', async () => {
+  it('muestra vacío sin fabricar parcelas y permite crear a FARMER', async () => {
     const { fixture, http } = await create('FARMER');
     expect(fixture.nativeElement.textContent).toContain('No tienes parcelas registradas');
-    expect(fixture.nativeElement.querySelector('form')).toBeNull();
+    expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Registrar una parcela propia');
     http.verify();
   });
 
-  it('crea sin ownerId del cliente y mantiene área opcional como null', async () => {
-    const { component, http } = await create('ADMIN');
-    component.form.setValue({ name: ' Parcela ', locationLabel: ' Chone ', areaM2: null });
+  it.each(['ADMIN', 'FARMER'] as const)(
+    'crea como %s sin ownerId y mantiene área opcional null',
+    async (role) => {
+      const { component, http } = await create(role);
+      component.form.setValue({ name: ' Parcela ', locationLabel: ' Chone ', areaM2: null });
+      component.create();
+      const request = http.expectOne('/api/v1/plots');
+      expect(request.request.body).toEqual({
+        name: 'Parcela',
+        locationLabel: 'Chone',
+        areaM2: null,
+      });
+      request.flush({});
+      http
+        .expectOne('/api/v1/plots?limit=20&offset=0')
+        .flush({ items: [], total: 0, limit: 20, offset: 0 });
+      expect(component.saving()).toBe(false);
+      expect(component.message()).toContain('Parcela creada');
+      http.verify();
+    },
+  );
+
+  it('FARMER envía formulario desde DOM con superficie positiva y bloquea doble envío', async () => {
+    const { fixture, component, http } = await create('FARMER');
+    component.form.setValue({ name: 'Mi cacao', locationLabel: 'Chone', areaM2: 1500 });
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     component.create();
-    const request = http.expectOne('/api/v1/plots');
-    expect(request.request.body).toEqual({ name: 'Parcela', locationLabel: 'Chone', areaM2: null });
-    request.flush({});
+    const req = http.expectOne('/api/v1/plots');
+    expect(req.request.body).toEqual({ name: 'Mi cacao', locationLabel: 'Chone', areaM2: 1500 });
+    req.flush({});
     http
       .expectOne('/api/v1/plots?limit=20&offset=0')
       .flush({ items: [], total: 0, limit: 20, offset: 0 });
+    http.verify();
+  });
+
+  it('valida campos y conserva borrador ante error sin reintentar POST', async () => {
+    const { component, http } = await create('FARMER');
+    component.create();
+    http.expectNone('/api/v1/plots');
+    component.form.setValue({ name: 'Cacao', locationLabel: 'Chone', areaM2: -1 });
+    component.create();
+    http.expectNone('/api/v1/plots');
+    component.form.controls.areaM2.setValue(null);
+    component.create();
+    http.expectOne('/api/v1/plots').flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(component.form.controls.name.value).toBe('Cacao');
     expect(component.saving()).toBe(false);
+    expect(component.error()).not.toBe('');
     http.verify();
   });
 });

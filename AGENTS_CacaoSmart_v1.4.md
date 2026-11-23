@@ -68,8 +68,10 @@ Replicar el concepto visual aprobado: sidebar verde oscuro, encabezado de parcel
 **Referencia visual documentada:** leer [contexto/DISENO_VISUAL_CacaoSmart.md](contexto/DISENO_VISUAL_CacaoSmart.md) antes de implementar o modificar la UI. Describe la captura aportada por el usuario: paleta aproximada, distribución, menú, tipografía y componentes, incluida la tarjeta de diagnóstico IA en lugar del circuito. Colores y medidas son estimaciones; la captura no confirma interacciones ni resultados reales. Los requisitos funcionales y de seguridad de [DERCAS](contexto/DERCAS_CacaoSmart_v1.4.md) prevalecen sobre los valores ilustrativos del mockup.
 
 ## API y seguridad
+- Actualización autorizada 2026-11-22: ADMIN y FARMER pueden crear parcelas propias. El propietario se obtiene de la sesión; no aceptar `ownerId` del cliente ni ampliar esta excepción a edición/archivo, dispositivos o rangos. El registro público sigue sin crear parcelas automáticamente.
 - Prefijo `/api/v1`.
 - JWT para usuarios; credencial independiente por dispositivo, almacenada como hash.
+- Sesión web corregida tras 5.12: JWT cortos en memoria, renovación con cookie HttpOnly/Strict y sesión absoluta de 8 horas revocable. No restaurar el logout fijo a 15 minutos ni persistir JWT/secretos de renovación en almacenamiento JavaScript. Ver `docs/session-renewal.md`.
 - Autorización por parcela en todas las consultas.
 - Validar payloads y rangos; rate limiting y logs sin datos sensibles.
 - Mantener OpenAPI actualizado.

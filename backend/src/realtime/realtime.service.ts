@@ -5,6 +5,7 @@ import { Server, Socket } from 'socket.io';
 import { isUUID } from 'class-validator';
 import type {
   DeviceStatusEvent,
+  IrrigationUpdatedEvent,
   TelemetrySubscription,
   TelemetryUpdatedEvent,
 } from '@cacaosmart/contracts';
@@ -12,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../database/prisma.service';
 import { SourcePolicy } from '../integrations/source-policy.service';
 import { connectionStatus } from '../devices/connection-status';
+import { sensorStatus, sensorStatusSelect, sensorStatusSignature } from './sensor-status';
 
 interface ClientState {
   token: string;
@@ -20,6 +22,7 @@ interface ClientState {
   joins: number;
   window: number;
   status?: string;
+  sensorStatus?: string;
 }
 
 @Injectable()
@@ -87,6 +90,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     const revision = ++state.revision;
     state.subscription = undefined;
     state.status = undefined;
+    state.sensorStatus = undefined;
     for (const room of socket.rooms) if (room !== socket.id) await socket.leave(room);
     if (Date.now() - state.window > 60000) {
       state.joins = 0;
@@ -129,7 +133,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     });
   }
 
-  async publish(event: TelemetryUpdatedEvent): Promise<void> {
+  async publish(
+    event: TelemetryUpdatedEvent,
+    irrigation?: IrrigationUpdatedEvent | null,
+  ): Promise<void> {
     // Solo después del commit y para eventos únicos. Revalidar cada destinatario.
     await Promise.all(
       [...this.clients].map(async ([socket, state]) => {
@@ -147,13 +154,50 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
             socket.disconnect(true);
             return;
           }
-          if (socket.connected && state.subscription === sub)
+          if (socket.connected && state.subscription === sub) {
             socket.emit('telemetry.updated', event);
+            if (
+              irrigation &&
+              irrigation.plotId === sub.plotId &&
+              irrigation.observation.plotId === sub.plotId &&
+              irrigation.observation.deviceId === sub.deviceId &&
+              irrigation.observation.source === sub.source
+            )
+              socket.emit('irrigation.updated', irrigation);
+            await this.publishSensorStatus(socket, state, sub);
+          }
         } catch {
           socket.disconnect(true);
         }
       }),
     );
+  }
+
+  private async publishSensorStatus(
+    socket: Socket,
+    state: ClientState,
+    sub: TelemetrySubscription,
+  ): Promise<void> {
+    const device = await this.db.$transaction(
+      (tx) =>
+        tx.device.findFirst({
+          where: { id: sub.deviceId, plotId: sub.plotId, source: sub.source },
+          select: sensorStatusSelect,
+        }),
+      { isolationLevel: 'RepeatableRead' },
+    );
+    if (!device) return;
+    const event = sensorStatus(sub, device);
+    const signature = sensorStatusSignature(event);
+    // Reauthorize after reading evidence; async work may outlive subscription/session changes.
+    if (!(await this.authorize(state, sub))) {
+      socket.disconnect(true);
+      return;
+    }
+    if (socket.connected && state.subscription === sub && state.sensorStatus !== signature) {
+      state.sensorStatus = signature;
+      socket.emit('sensor.status', event);
+    }
   }
 
   private async scan(): Promise<void> {
@@ -184,6 +228,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
               state.status = signature;
               socket.emit('device.status', event);
             }
+            await this.publishSensorStatus(socket, state, sub);
           } catch {
             socket.disconnect(true);
           }

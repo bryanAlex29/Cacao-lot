@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { AuthenticatedDevice } from '../devices/device-auth.service';
@@ -59,9 +60,12 @@ export class TelemetryService {
     );
     if (!result.duplicate)
       void this.realtime
-        .publish({ schemaVersion: '1.0', plotId: auth.plotId, reading: result.reading })
+        .publish(
+          { schemaVersion: '1.0', plotId: auth.plotId, reading: result.reading },
+          result.irrigationUpdate,
+        )
         .catch(() => undefined);
-    return result;
+    return { duplicate: result.duplicate, reading: result.reading };
   }
 
   private async select(plotId: string, ownerId: string, query: SnapshotQueryDto) {
@@ -98,6 +102,71 @@ export class TelemetryService {
 
   async history(plotId: string, ownerId: string, query: HistoryQueryDto) {
     const device = await this.select(plotId, ownerId, query);
+    const { from, to } = this.period(query);
+    return device
+      ? this.repository.history(device.id, ownerId, from, to, query.limit, query.offset)
+      : { items: [], total: 0, limit: query.limit, offset: query.offset };
+  }
+
+  async irrigationHistory(plotId: string, ownerId: string, query: HistoryQueryDto) {
+    const device = await this.select(plotId, ownerId, query);
+    const { from, to } = this.period(query);
+    return device
+      ? this.repository.irrigationHistory(
+          device.id,
+          plotId,
+          ownerId,
+          query.source,
+          from,
+          to,
+          query.limit,
+          query.offset,
+        )
+      : { items: [], total: 0, limit: query.limit, offset: query.offset };
+  }
+
+  async exportReadings(
+    plotId: string,
+    ownerId: string,
+    query: Pick<HistoryQueryDto, 'source' | 'deviceId' | 'from' | 'to'>,
+  ) {
+    const device = await this.select(plotId, ownerId, query);
+    const { from, to } = this.period(query);
+    const page = device
+      ? await this.repository.history(device.id, ownerId, from, to, 10001, 0)
+      : { items: [] };
+    return this.boundedExport(page.items);
+  }
+
+  async exportIrrigation(
+    plotId: string,
+    ownerId: string,
+    query: Pick<HistoryQueryDto, 'source' | 'deviceId' | 'from' | 'to'>,
+  ) {
+    const device = await this.select(plotId, ownerId, query);
+    const { from, to } = this.period(query);
+    const page = device
+      ? await this.repository.irrigationHistory(
+          device.id,
+          plotId,
+          ownerId,
+          query.source,
+          from,
+          to,
+          10001,
+          0,
+        )
+      : { items: [] };
+    return this.boundedExport(page.items);
+  }
+
+  private boundedExport<T>(items: T[]): T[] {
+    if (items.length > 10000)
+      throw new PayloadTooLargeException('El reporte supera 10000 registros. Reduce el periodo.');
+    return items;
+  }
+
+  private period(query: Pick<HistoryQueryDto, 'from' | 'to'>) {
     const to = query.to ? new Date(query.to) : new Date();
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - 86400000);
     if (
@@ -108,8 +177,6 @@ export class TelemetryService {
       throw new BadRequestException(
         'Rango UTC/con zona horaria requerido, ordenado y máximo 31 días',
       );
-    return device
-      ? this.repository.history(device.id, ownerId, from, to, query.limit, query.offset)
-      : { items: [], total: 0, limit: query.limit, offset: query.offset };
+    return { from, to };
   }
 }
