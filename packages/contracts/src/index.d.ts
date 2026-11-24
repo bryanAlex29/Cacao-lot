@@ -262,7 +262,8 @@ export interface SoilMoistureAlert extends TelemetrySubscription {
   closeReason: MoistureAlertCloseReason | null;
   acknowledgedAt: string | null;
 }
-export type WeatherVariable = 'temperature_2m' | 'relative_humidity_2m' | 'precipitation' | 'et0_fao_evapotranspiration';
+export type WeatherVariable =
+  'temperature_2m' | 'relative_humidity_2m' | 'precipitation' | 'et0_fao_evapotranspiration';
 export interface WeatherProfileSummary {
   latitude: number;
   longitude: number;
@@ -306,4 +307,31 @@ export interface WeatherSnapshot {
   profile: WeatherProfileSummary | null;
   items: WeatherObservationSummary[];
   provenance: WeatherProvenance | null;
+}
+
+/** Coverage inspection only: no trained model or predicted values in this increment. */
+export interface PredictionZoneCoverage {
+  code: SoilSensorId;
+  sensorId: string | null;
+  enabled: boolean;
+  samples: number;
+  validSamples: number;
+  validDaysUtc: number;
+  firstValidAt: string | null;
+  lastValidAt: string | null;
+}
+export interface PredictionAvailability {
+  schemaVersion: '1.0';
+  plotId: string;
+  source: DataSource;
+  evaluatedAt: string;
+  window: { from: string; toExclusive: string; timezone: 'UTC'; completeDays: 30 };
+  target: { variable: 'soil_moisture'; unit: '%'; horizonDays: 1 };
+  status: 'unavailable';
+  reason: 'model_not_implemented';
+  model: null;
+  predictions: [];
+  waterDemand: null;
+  device: { id: string; serial: string; isActive: boolean } | null;
+  zones: PredictionZoneCoverage[];
 }

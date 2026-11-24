@@ -19,6 +19,18 @@
     "simulator:provision": "node scripts/simulator-provision.mjs",
     "simulator": "node scripts/simulator.mjs",
     "test:simulator": "node --test scripts/simulator.test.mjs",
+    "test:dependency-security": "node --test scripts/dependency-security.test.mjs",
+    "test:backup": "node --test scripts/backup-restore.test.mjs",
+    "test:backup:integration": "node --test scripts/backup-bundle.integration.mjs",
+    "backup:verify": "node scripts/verify-backup.mjs",
+    "backup:create": "node scripts/create-backup.mjs",
+    "prediction:demo": "node scripts/prediction-baseline.mjs --demo",
+    "prediction:baseline": "node scripts/prediction-baseline.mjs",
+    "test:prediction-cli": "node --test scripts/prediction-baseline.test.mjs",
+    "prediction:regression:demo": "node scripts/prediction-regression.mjs --demo",
+    "prediction:regression": "node scripts/prediction-regression.mjs",
+    "test:regression-python": "node scripts/test-regression-python.mjs",
+    "test:regression-cli": "node --test scripts/prediction-regression.test.mjs",
     "test:integration": "node scripts/integration-test.mjs",
     "test:browser": "node scripts/integration-test.mjs --browser",
     "dev:frontend": "npm run start --workspace=@cacaosmart/frontend",
@@ -34,6 +46,11 @@
     "db:validate": "npm run prisma:validate --workspace=@cacaosmart/backend",
     "db:migrate": "npm run prisma:migrate --workspace=@cacaosmart/backend",
     "smoke": "node scripts/smoke.mjs"
+  },
+  "overrides": {
+    "@prisma/config@7.10.1": {
+      "effect": "3.22.1"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

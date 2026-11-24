@@ -1,0 +1,178 @@
+<a class="skip-link" href="#prediction-main">Saltar al contenido</a>
+<div class="workspace">
+  <app-sidebar active="prediction" [plotId]="plot()?.id ?? null" />
+  <div class="main-area">
+    <app-page-header
+      [title]="plot()?.name ?? 'Predicción hídrica'"
+      [subtitle]="
+        plot()?.locationLabel ?? (busy() ? 'Consultando parcela…' : 'Parcela no disponible')
+      "
+      section="DISPONIBILIDAD DEL PRONÓSTICO"
+      [user]="auth.user()"
+      [canChangePlot]="!!plot()"
+      (signOut)="logout()"
+    />
+    <main id="prediction-main" tabindex="-1" [attr.aria-busy]="busy()">
+      <span class="eyebrow">PREDICCIÓN HÍDRICA · PREPARACIÓN</span>
+      <h1>Predicción hídrica</h1>
+      <p class="notice">
+        <strong>Pronóstico no disponible · modelo no implementado.</strong> Esta pantalla comprueba
+        cobertura almacenada, no predice humedad ni calcula déficit, litros o fecha de riego. No
+        controla la válvula.
+      </p>
+      <p>
+        Objetivo previsto: humedad del suelo (%) por zona, a 1 día. Todavía no hay modelo entrenado,
+        evaluación de error ni intervalos de incertidumbre.
+      </p>
+      <button type="button" (click)="loadDevices(offset())" [disabled]="busy()">
+        Actualizar equipos
+      </button>
+      @if (busy()) {
+        <p role="status">Consultando datos privados…</p>
+      }
+      @if (error()) {
+        <p role="alert">{{ error() }}</p>
+      }
+      @if (plot()) {
+        <section class="panel" aria-labelledby="device-title">
+          <h2 id="device-title">Equipo y origen de datos</h2>
+          <p>
+            No se combinan dispositivos ni se sustituyen datos reales por DEMO. Selecciona un equipo
+            de esta página.
+          </p>
+          @if (total() === 0) {
+            <p>No hay equipos registrados. No se crearán lecturas de ejemplo.</p>
+          } @else {
+            <label for="prediction-device">Equipo</label>
+            <select
+              id="prediction-device"
+              #deviceSelect
+              [value]="selectedId()"
+              [disabled]="busy()"
+              (change)="choose(deviceSelect.value)"
+            >
+              <option value="">Selecciona un equipo</option>
+              @for (device of devices(); track device.id) {
+                <option [value]="device.id">
+                  {{ device.serial }} ·
+                  {{ device.source === 'demo' ? 'DEMO · Datos simulados' : 'REAL'
+                  }}{{ device.isActive ? '' : ' · Deshabilitado' }}
+                </option>
+              }
+            </select>
+            <div class="actions">
+              <button
+                type="button"
+                (click)="loadDevices(offset() - 10)"
+                [disabled]="busy() || offset() === 0"
+              >
+                Equipos anteriores
+              </button>
+              <span>{{ offset() + 1 }}–{{ offset() + devices().length }} de {{ total() }}</span>
+              <button
+                type="button"
+                (click)="loadDevices(offset() + 10)"
+                [disabled]="busy() || offset() + devices().length >= total()"
+              >
+                Equipos siguientes
+              </button>
+            </div>
+            @if (selectedId()) {
+              <button type="button" (click)="choose(selectedId())" [disabled]="busy()">
+                Actualizar cobertura
+              </button>
+            }
+          }
+        </section>
+        @if (snapshot(); as data) {
+          <section class="panel" aria-labelledby="coverage-title">
+            <h2 id="coverage-title">Cobertura observada, no suficiencia del modelo</h2>
+            <p class="source" [class.demo]="data.source === 'demo'">
+              {{
+                data.source === 'demo'
+                  ? 'DEMO · Datos simulados; no validan el comportamiento del cultivo'
+                  : 'REAL · Registros almacenados; calibración no evaluada por esta pantalla'
+              }}
+            </p>
+            <p>
+              Del {{ data.window.from | date: 'dd/MM/yyyy' : 'UTC' }} hasta antes del
+              {{ data.window.toExclusive | date: 'dd/MM/yyyy' : 'UTC' }} · 30 días completos UTC. No
+              incluye el día UTC en curso.
+            </p>
+            <p>
+              Consultado {{ data.evaluatedAt | date: 'dd/MM/yyyy HH:mm:ss' : 'UTC' }} UTC. No es un
+              indicador de conexión en vivo.
+            </p>
+            @if (!data.device?.isActive) {
+              <p class="notice">Equipo deshabilitado; solo se inspeccionan registros históricos.</p>
+            }
+            <div class="zones">
+              @for (zone of data.zones; track zone.code) {
+                <article [attr.aria-labelledby]="zone.code + '-title'">
+                  <h3 [id]="zone.code + '-title'">{{ zoneNames[zone.code] }}</h3>
+                  <p>
+                    {{
+                      zone.sensorId === null
+                        ? 'Sensor no registrado'
+                        : !zone.enabled
+                          ? 'Sensor deshabilitado'
+                          : zone.validSamples === 0
+                            ? 'Sin muestras válidas en el periodo'
+                            : 'Hay observaciones; no acredita suficiencia'
+                    }}
+                  </p>
+                  <dl>
+                    <dt>Registros de la sonda</dt>
+                    <dd>{{ zone.samples }}</dd>
+                    <dt>Muestras válidas de entrada</dt>
+                    <dd>{{ zone.validSamples }}</dd>
+                    <dt>Días UTC con muestra válida</dt>
+                    <dd>{{ zone.validDaysUtc }} de 30</dd>
+                    <dt>Primera muestra válida</dt>
+                    <dd>
+                      {{
+                        zone.firstValidAt
+                          ? (zone.firstValidAt | date: 'dd/MM/yyyy HH:mm' : 'UTC') + ' UTC'
+                          : 'No disponible'
+                      }}
+                    </dd>
+                    <dt>Última muestra válida</dt>
+                    <dd>
+                      {{
+                        zone.lastValidAt
+                          ? (zone.lastValidAt | date: 'dd/MM/yyyy HH:mm' : 'UTC') + ' UTC'
+                          : 'No disponible'
+                      }}
+                    </dd>
+                  </dl>
+                </article>
+              }
+            </div>
+            <p class="help">
+              «Válida» significa calidad de entrada válida y valor entre 0 y 100, no calibración
+              física ni validez agronómica. Los días con alguna muestra no garantizan continuidad ni
+              datos suficientes para entrenar.
+            </p>
+          </section>
+        }
+      }
+      <section class="panel" aria-labelledby="next-title">
+        <h2 id="next-title">Qué falta para ofrecer un pronóstico</h2>
+        <ul>
+          <li>
+            Definir datos y variables de entrenamiento con calibración y procedencia verificadas.
+          </li>
+          <li>
+            Implementar regresión múltiple y comparar con persistencia y un balance hídrico con
+            parámetros justificados.
+          </li>
+          <li>
+            Evaluar por fechas y horizonte, sin información futura; publicar métricas y límites
+            antes de afirmar fiabilidad.
+          </li>
+        </ul>
+        <p>No se consulta OpenAI ni el proveedor de clima al abrir esta pantalla.</p>
+      </section>
+    </main>
+  </div>
+</div>

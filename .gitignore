@@ -10,3 +10,5 @@ coverage/
 !**/.env.example
 backend/generated/
 .local/
+__pycache__/
+*.pyc

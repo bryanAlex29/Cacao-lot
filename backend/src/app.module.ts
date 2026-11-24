@@ -19,6 +19,7 @@ import { MoistureModule } from './alerts/moisture/moisture.module';
 import { ReportsModule } from './reports/reports.module';
 import { DiagnosisModule } from './ai-diagnostics/diagnosis.module';
 import { WeatherModule } from './weather/weather.module';
+import { PredictionModule } from './prediction/prediction.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { WeatherModule } from './weather/weather.module';
     ReportsModule,
     DiagnosisModule,
     WeatherModule,
+    PredictionModule,
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
   ],
   providers: [

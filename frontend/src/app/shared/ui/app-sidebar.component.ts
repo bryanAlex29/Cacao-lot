@@ -92,6 +92,13 @@ export type DashboardSection = 'readings' | 'history' | 'irrigation-history' | '
           >
             <app-icon name="rain" /> Clima histórico
           </a>
+          <a
+            [routerLink]="['/parcelas', plotId(), 'prediccion']"
+            [class.active]="active() === 'prediction'"
+            [attr.aria-current]="active() === 'prediction' ? 'page' : null"
+          >
+            <app-icon name="water" /> Predicción hídrica <small>No disponible</small>
+          </a>
         }
       </nav>
       <div class="sidebar-footer">
@@ -105,7 +112,7 @@ export type DashboardSection = 'readings' | 'history' | 'irrigation-history' | '
 })
 export class AppSidebarComponent {
   readonly plotId = input<string | null>(null);
-  readonly active = input<'dashboard' | 'plots' | 'diagnosis' | 'weather'>('plots');
+  readonly active = input<'dashboard' | 'plots' | 'diagnosis' | 'weather' | 'prediction'>('plots');
   readonly expanded = signal(false);
   readonly sectionSelected = output<DashboardSection>();
   readonly sections: { fragment: DashboardSection; label: string; icon: IconName }[] = [

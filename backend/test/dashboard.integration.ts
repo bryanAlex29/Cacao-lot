@@ -2636,7 +2636,55 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     }
   });
 
-  it('encabezado común soporta nombres largos en cuatro pantallas y 320/390/768/1440 px', async () => {
+  it('predicción muestra cobertura DEMO real de API sin pronósticos, con selección y navegación accesible móvil', async () => {
+    const predictionPage = await page.context().newPage();
+    const unexpected: string[] = [];
+    predictionPage.on('request', (request) => {
+      if (
+        (request.url().includes('/predictions') && request.method() !== 'GET') ||
+        request.url().includes('/weather/sync') ||
+        request.url().includes('api.open-meteo.com') ||
+        request.url().includes('api.openai.com')
+      )
+        unexpected.push(request.url());
+    });
+    try {
+      await predictionPage.setViewportSize({ width: 1440, height: 1000 });
+      await predictionPage.goto(`${frontendUrl}/parcelas/${plotId}/dashboard`);
+      await predictionPage.getByRole('link', { name: /Predicción hídrica/ }).click();
+      await predictionPage.getByLabel('Equipo', { exact: true }).waitFor();
+      expect(await predictionPage.locator('article').count()).toBe(0);
+      await predictionPage.getByLabel('Equipo', { exact: true }).selectOption(deviceId);
+      await predictionPage.locator('.source.demo').waitFor();
+      expect(await predictionPage.locator('article').count()).toBe(3);
+      expect(await predictionPage.locator('main').textContent()).toContain(
+        'modelo no implementado',
+      );
+      expect(await predictionPage.locator('main').textContent()).toContain('30 días completos UTC');
+      expect(await predictionPage.locator('nav a[aria-current="page"]').count()).toBe(1);
+      expect(await predictionPage.locator('app-page-header .connection').count()).toBe(0);
+      for (const width of [320, 390, 768, 1440]) {
+        await predictionPage.setViewportSize({ width, height: 1000 });
+        expect(
+          await predictionPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+        if (width === 390 || width === 1440)
+          await predictionPage.screenshot({
+            path: join(directory, `prediction-${width}.png`),
+            fullPage: true,
+          });
+      }
+      await predictionPage.setViewportSize({ width: 390, height: 844 });
+      await predictionPage.getByRole('button', { name: 'Menú', exact: true }).click();
+      await predictionPage.getByRole('link', { name: 'Monitoreo', exact: true }).click();
+      await predictionPage.waitForURL(`**/parcelas/${plotId}/dashboard#readings`);
+      expect(unexpected).toEqual([]);
+    } finally {
+      await predictionPage.close();
+    }
+  });
+
+  it('encabezado común soporta nombres largos en cinco pantallas y 320/390/768/1440 px', async () => {
     const db = app.get(PrismaService);
     const plot = await db.plot.findUniqueOrThrow({ where: { id: plotId } });
     const owner = await db.user.findUniqueOrThrow({ where: { id: plot.ownerId } });
@@ -2655,6 +2703,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
         ['plots', '/parcelas'],
         ['diagnosis', `/diagnostico-ia?plotId=${plotId}`],
         ['weather', `/parcelas/${plotId}/clima`],
+        ['prediction', `/parcelas/${plotId}/prediccion`],
       ];
       for (const [label, route] of routes) {
         await page.goto(frontendUrl + route);

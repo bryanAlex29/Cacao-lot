@@ -1,5 +1,33 @@
 # Resumen para continuar CacaoSmart IoT
 
+## Regresión múltiple offline — comparación experimental
+
+Implementados dataset independiente de dos retardos por sonda y entrenamiento Python/scikit-learn solo con train, con comparación frente a persistencia sobre las mismas filas de validación/prueba. Entorno privado `.local/prediction-python` instalado con hashes y `pip check` correcto, sin cambiar Python global ni npm. Nuevos comandos `prediction:regression:demo`, `prediction:regression`, `test:regression-python`, `test:regression-cli`. **6 pruebas TS y 12 Python correctas**, tipos/lint y demo correctos; validación final secuencial en segundo plano pendiente. Ver [alcance y reproducción](prediction-offline-regression.md). No habilita pronósticos web, litros o válvulas; sin datos principal, migraciones o proveedores externos. Trabajo local sin publicar.
+
+## Predicción — dataset offline y persistencia experimental
+
+Implementados preparación diaria as-of, separación cronológica train/validation/test y referencia de persistencia por sonda, con MAE/RMSE/sesgo en puntos porcentuales y artefactos privados reproducibles. Comandos `prediction:demo` y `prediction:baseline -- --input .local/ENTRADA.json`. **Revalidación secuencial correcta: 332 pruebas backend (32 del pipeline) y 2 CLI**, tipos/lint/build/salud correctos; formato/diff y exclusión Git de artefactos verificados. El primer intento CLI paralelo agotó el límite; las repeticiones aislada y secuencial pasaron sin ampliarlo. Ver [definición temporal, comandos y límites](prediction-offline-persistence.md). No cambia la pantalla/API de disponibilidad ni habilita pronósticos web, regresión, litros o válvulas. Sin conexión del motor a DB, proveedores externos, dependencias nuevas o cambios de datos principal. Trabajo local sin publicar.
+
+## Predicción hídrica — disponibilidad y cobertura, sin modelo todavía
+
+Añadidos contrato/API de solo lectura y pantalla `/parcelas/:id/prediccion` con acceso desde el menú, selección explícita de equipo/origen y cobertura de las tres sondas en 30 días completos UTC. **No genera pronósticos, litros, precisión ni órdenes de válvula**; declara modelo no implementado incluso si hay lecturas. **1.094 pruebas correctas**: 300 backend, 551 Angular, 199 integración PostgreSQL y 44 Edge; lint/build/tipos/formato/diff correctos. Salud y frontend 200, ruta OpenAPI presente. Ver [alcance, contrato y revisión](prediction-availability.md). Sin migraciones, dependencias, proveedores externos ni cambios de datos principal. Cambios locales, sin publicar.
+
+## Respaldo actual coherente de base y fotografías
+
+Añadido `npm run backup:create` y ampliado `backup:verify` para conjuntos versión 2: misma instantánea PostgreSQL para dump/manifiesto, todas las tablas incluidas las migraciones y copia de imágenes referenciadas con SHA-256. **8 pruebas unitarias y 1 integral real con JPEG sintético**, sin fixtures en principal. Creado/recuperado el respaldo actual de **20 tablas y 0 fotos referenciadas**, conservando compatibilidad con el respaldo antiguo de 14 tablas. Ver [comandos, evidencia y límites](current-backup-bundle.md). Sin sobrescribir datos/fotos vivos ni activar proveedores. Periodicidad, retención, cifrado y copia externa siguen pendientes; cambios sin publicar.
+
+## Ensayo local de restauración del respaldo
+
+Se añadió `npm run backup:verify -- --directory .local/backups/DIRECTORIO` y se verificó el respaldo previo a IA/clima en una base temporal: **14 tablas recuperadas con conteos/huellas idénticos** y limpieza del destino temporal. La principal no se sobrescribió. Cinco pruebas de guardas correctas, sin dependencias ni migraciones nuevas. Ver [alcance y límites de recuperación](backup-restore-verification.md). Ese respaldo no cubre datos/fotos IA posteriores. Las 16 moderadas se revisaron, pero no se forzaron versiones mayores o degradación de Angular; continúan pendientes. No hay commit/push/merge de estos cambios.
+
+## Corrección local de seguridad — Effect/Prisma
+
+El siguiente incremento corrigió las tres alertas altas de la cadena Prisma con un override acotado de Effect a **3.22.1**, conservando Prisma **7.10.1**. Auditoría actual: **0 altas/críticas y 16 moderadas**. **1.062 pruebas correctas** ejecutadas, incluidas dos regresiones nuevas; tipos/lint/build/Prisma y salud local correctos. Sin cambios de datos, API, permisos, firmware, migraciones o proveedores externos. Ver [alcance, evidencia y reinstalación segura](security-effect-2026-11-24.md). Detener servidores antes de `npm ci` en Windows y regenerar Prisma después. Esta corrección sigue local, sin commit/push/merge. Los resultados inferiores de 19 alertas y 1.060 pruebas son históricos de la revisión anterior.
+
+## Revisión de Bryan — 24 de noviembre de 2026
+
+Descargada la rama publicada `feature/agricultural-management`, commit `0bb52d1`; `main` permanece en `9fe2dc1`, sin fusión. Corregido localmente el bloqueo TS2322 de la fixture de unidad inválida de clima, sin modificar contratos productivos. **1.060 pruebas correctas ejecutadas**: 287 backend, 534 Angular, 186 integración, 43 Edge y 10 simulador. Tipos/lint/build/Prisma correctos; formato global y auditoría de dependencias tienen pendientes. **El usuario autorizó y ya se aplicaron las dos migraciones IA/clima a la base local**, con respaldo privado en `.local/backups/`, 14 tablas anteriores idénticas, cinco nuevas vacías y `.env` intacto. Arranque con IA mock y clima externo desactivado. Ver [informe de revisión y siguiente paso](review-2026-11-24.md). Los apartados inferiores sobre publicación pendiente y bloqueo de clima registran el estado anterior recibido; esta revisión no está publicada.
+
 ## Entrega a Bryan — probar antes de desarrollar
 
 **Preparación para publicación autorizada:** código completo, migraciones,
