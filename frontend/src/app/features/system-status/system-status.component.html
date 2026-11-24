@@ -1,10 +1,10 @@
 <a class="skip-link" href="#main">Saltar al contenido</a>
 <div class="shell">
   <aside class="sidebar" aria-label="Identidad del proyecto">
-    <div class="brand-mark" aria-hidden="true">CS</div>
+    <div class="brand-mark" aria-hidden="true"><app-icon name="leaf" /></div>
     <strong class="brand">CacaoSmart IoT</strong>
     <p>Riego inteligente para<br />cultivos de cacao</p>
-    <div class="current-page">Inicio · Estado del proyecto</div>
+    <div class="current-page"><app-icon name="monitor" /> Estado del sistema</div>
     <footer>Chone, Manabí, Ecuador<br /><strong>TerriTech · CITIC 2026</strong></footer>
   </aside>
   <div class="workspace">
@@ -20,18 +20,18 @@
     </header>
     <main id="main" tabindex="-1">
       <section class="intro" aria-labelledby="page-title">
-        <span class="eyebrow">EL CULTIVO, EN EL CENTRO</span>
-        <h1 id="page-title">Una base sólida para<br />cuidar el cacao.</h1>
+        <span class="eyebrow">ESTADO DE LA PLATAFORMA</span>
+        <h1 id="page-title">Servicios disponibles para<br />cuidar el cacao.</h1>
         <p>
-          Estamos preparando la plataforma de monitoreo. Esta pantalla verifica la infraestructura;
-          todavía no muestra mediciones del cultivo.
+          Consulta la disponibilidad de los servicios de CacaoSmart. Esta comprobación verifica la
+          infraestructura, no la conexión de los sensores ni las condiciones del cultivo.
         </p>
       </section>
 
       <section class="health-panel" aria-labelledby="health-title" [attr.aria-busy]="checking()">
         <div class="panel-heading">
           <div>
-            <h2 id="health-title">Estado de los servicios</h2>
+            <h2 id="health-title"><app-icon name="monitor" /> Estado de los servicios</h2>
             <p>Comprobación real de la API y su conexión a PostgreSQL.</p>
           </div>
           <button type="button" (click)="refresh()" [disabled]="checking()">
@@ -39,7 +39,7 @@
           </button>
         </div>
         <div class="service-grid" aria-live="polite">
-          <article class="service">
+          <article class="service" [class.unavailable]="!checking() && status()?.api === 'down'">
             <span class="service-label">API · NestJS</span>
             <h3>
               {{
@@ -59,7 +59,10 @@
             }}</span>
             <p>La respuesta confirma el servicio, no la conexión del ESP32.</p>
           </article>
-          <article class="service">
+          <article
+            class="service"
+            [class.unavailable]="!checking() && status()?.database === 'down'"
+          >
             <span class="service-label">Base de datos · PostgreSQL</span>
             <h3>
               {{
@@ -81,22 +84,32 @@
           </article>
         </div>
         @if (checkedAt()) {
-          <p class="last-check">
+          <p class="last-check" role="status">
             Última comprobación: {{ checkedAt() | date: 'dd/MM/yyyy HH:mm:ss' }} · hora local del
             navegador.
+          </p>
+        }
+        @if (
+          !checking() && status() && (status()?.api === 'down' || status()?.database === 'down')
+        ) {
+          <p class="service-warning" role="status">
+            No se pudo confirmar la disponibilidad de todos los servicios. Puedes volver a
+            comprobar; no se envían datos del cultivo ni se modifica el riego.
           </p>
         }
       </section>
 
       <section class="notice" aria-labelledby="next-title">
-        <h2 id="next-title">El siguiente paso: conectar los sensores</h2>
+        <h2 id="next-title"><app-icon name="leaf" /> Qué confirma esta pantalla</h2>
         <p>
-          El acceso seguro, las parcelas y el registro de dispositivos ya tienen una base funcional.
-          Después se incorporarán tres sensores independientes, histórico y actualizaciones en vivo.
+          El monitoreo, el historial y las alertas se consultan desde tus parcelas, con su origen y
+          fecha. Que estos servicios estén disponibles no demuestra que un ESP32 esté enviando
+          datos.
         </p>
         <p>
-          <strong>Sin datos de sensores todavía.</strong> El diagnóstico IA, las métricas de agua y
-          la predicción se incorporarán en sus fases. El ESP32 conserva el control local del riego.
+          El diagnóstico fotográfico sigue en modo DEMO. El clima histórico modelado no es un
+          pronóstico; no hay predicción hídrica validada. El ESP32 conserva el control local del
+          riego.
         </p>
       </section>
     </main>

@@ -7,13 +7,26 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { Page, PlotSummary } from '@cacaosmart/contracts';
 import { AuthService } from '../../core/auth/auth.service';
 import { DeviceInventoryComponent } from './device-inventory.component';
+import { PlotManagementComponent } from './plot-management.component';
+import { AppSidebarComponent } from '../../shared/ui/app-sidebar.component';
+import { PageHeaderComponent } from '../../shared/ui/page-header.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-plots',
   standalone: true,
-  imports: [ReactiveFormsModule, DecimalPipe, RouterLink, DeviceInventoryComponent],
+  imports: [
+    ReactiveFormsModule,
+    DecimalPipe,
+    RouterLink,
+    DeviceInventoryComponent,
+    PlotManagementComponent,
+    AppSidebarComponent,
+    PageHeaderComponent,
+    IconComponent,
+  ],
   templateUrl: './plots.component.html',
-  styleUrl: './plots.component.css',
+  styleUrls: ['./plots.component.css', '../../shared/ui/workspace.css'],
 })
 export class PlotsComponent implements OnInit {
   readonly auth = inject(AuthService);

@@ -66,7 +66,7 @@ describe('Formulario de fechas del histórico', () => {
     expect(fixture.nativeElement.textContent).toContain('Periodo fijo:');
     expect(fixture.nativeElement.querySelectorAll('button[aria-pressed="true"]').length).toBe(0);
     const preset = vi.spyOn(component.preset, 'emit');
-    fixture.nativeElement.querySelector('.quick button').click();
+    fixture.nativeElement.querySelector('.period-presets button').click();
     expect(preset).toHaveBeenCalledWith(1);
   });
 });

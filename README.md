@@ -2,13 +2,28 @@
 
 Monitoreo y riego inteligente para cacao en Chone, Manabí, Ecuador. Proyecto TerriTech Hackathon CITIC 2026.
 
-## Estado actual: fase 5.14 (inventario de dispositivos y sensores)
+**Traspaso a Bryan:** [avance y guía de pruebas iniciales](docs/ENTREGA_BRYAN.md),
+[prompt de continuidad](docs/PROMPT_BRYAN.md) y Word
+`CacaoSmart_Avance_y_Traspaso_Bryan.docx` en la raíz. La guía incluye IA/clima y
+renovación visual 1–6; los estados de fases inferiores son registros históricos.
+Primero descargar el commit completo de entrega, probar y reportar; no comenzar
+funciones nuevas ni asumir que los cambios locales ya están en GitHub.
+
+## Estado actual: fase 6.3 (comparación privada de fotografías)
+
+**Nuevo:** selecciona dos fotos en **Diagnóstico IA · DEMO → Historial privado → Añadir a comparación**. Fotografías, fechas y resultados existentes lado a lado, intercambio A/B y limpieza; apiladas en móvil. Comparación manual, sin afirmar mejoría ni identificar plantas automáticamente. Sin nuevo análisis, migración o dependencia. **OpenAI continúa en espera.** Ver [guía y revisión manual](docs/phase-6-3.md).
+
+**Nuevo:** Desde/Hasta y estado en **Diagnóstico IA · DEMO → Historial privado**. Hora local convertida a UTC, fechas inclusivas por creación, periodo fijo máximo 31 días, filtros conservados al paginar/actualizar y botón Limpiar. Sin migraciones ni dependencias respecto a 6.1. **OpenAI queda en espera por decisión del usuario; no se conecta ni genera costos.** Ver [guía y prueba manual](docs/phase-6-2.md).
+
+**Nuevo:** **Mis parcelas → Diagnóstico IA · DEMO**, para ADMIN/FARMER propietarios, incluso sin sensores. Foto con vista previa y consentimiento, validación JPEG/PNG/WebP (8 MB), sanitización sin EXIF, almacenamiento privado, resultado simulado no concluyente, historial y eliminación. Cuota 5 intentos/día UTC y retención 7 días por defecto. **No usa OpenAI ni genera costos; no detecta enfermedades reales.** Ver [guía, configuración y límites](docs/phase-6-1.md). Requiere instalar `sharp`, generar Prisma y aplicar la migración aditiva con los comandos habituales de arranque.
+
+**Nueva entrega local:** ADMIN propietario puede registrar dispositivos desde **Mis parcelas → Ver dispositivos y sensores**, guardar la clave mostrada una sola vez y habilitar/deshabilitar recepción con confirmación. También puede **Editar parcela** y **Archivar parcela** con nombre escrito. No cambia roles FARMER ni asignaciones; no borra físicamente datos ni controla válvulas. Sin migraciones/dependencias nuevas. Ver [guía, límites y pruebas](docs/phase-5-15-16.md). Pendiente revisión manual; sin publicación automática.
 
 **Últimos incrementos:** fechas Desde/Hasta del riego observado (5.13, máximo 31 días y periodo fijo) e inventario de solo lectura en **Mis parcelas → Ver dispositivos y sensores** (5.14, paginado, REAL/DEMO, último contacto y sensores). Sin nuevas migraciones ni dependencias respecto a `3ba7bf4`. Ver [fase 5.13](docs/phase-5-13.md), [fase 5.14](docs/phase-5-14.md) y [guía para continuar](docs/CONTINUAR.md).
 
 **Corrección de sesión:** ya no se expulsa al usuario al vencer el primer JWT de 15 minutos. Renovación automática mediante cookie HttpOnly y sesión revocable, máximo absoluto 8 horas; también recupera una recarga. **Iniciar sesión una vez tras actualizar** para activar la cookie nueva. Ver [seguridad, límites y prueba manual](docs/session-renewal.md).
 
-Base ejecutable con **Angular + NestJS + PostgreSQL/Prisma**, registro, parcelas propias y **dashboard de telemetría en vivo** con tres zonas. La pantalla pública `/estado` comprueba salud real de API/PostgreSQL. Hay alertas persistentes de desconexión y baja humedad por sonda; la migración de humedad fue verificada en bases temporales y aplicada localmente con autorización, preservando datos anteriores. IA y métricas hídricas siguen pendientes, sin resultados inventados.
+Base ejecutable con **Angular + NestJS + PostgreSQL/Prisma**, registro, parcelas propias y **dashboard de telemetría en vivo** con tres zonas. La pantalla pública `/estado` comprueba salud real de API/PostgreSQL. Hay alertas persistentes de desconexión y baja humedad por sonda; la migración de humedad fue verificada en bases temporales y aplicada localmente con autorización, preservando datos anteriores. IA real y métricas hídricas siguen pendientes; el flujo fotográfico de 6.1 es simulado.
 
 Fase 5: **rangos min/max por UUID de sensor**, con permisos por propietario, auditoría atómica y versión para ediciones concurrentes. ADMIN propietario puede editarlos desde «Configurar rango»; FARMER conserva solo lectura. Las tarjetas de A/B/C, temperatura y humedad ambiental comparan las lecturas recientes con su rango: **Bajo / En rango / Alto**, manteniendo calidad, antigüedad y real/DEMO por separado. Los extremos son inclusivos; sin configuración no se inventan límites. La comparación es numérica, no diagnóstico ni prueba de calibración. El gráfico de suelo añade mínimos/máximos **por vigencia**: cambiar hoy un rango no lo aplica al pasado. Ver [API de fase 5.1](docs/phase-5.md), [consulta de fase 5.2](docs/phase-5-2.md), [edición de fase 5.3](docs/phase-5-3.md), [clasificación de fase 5.4](docs/phase-5-4.md) y [límites históricos de fase 5.5](docs/phase-5-5.md).
 
@@ -38,7 +53,7 @@ Fase 5: **rangos min/max por UUID de sensor**, con permisos por propietario, aud
 - Tipos compartidos de telemetría y puertos para desacoplar fuentes demo/reales.
 - Pruebas de configuración, salud HTTP y presentación de disponibilidad.
 
-No hay análisis IA, predicción ni control remoto de válvula implementados. El recorrido completo hasta Angular está probado con simulador, **no con ESP32 real**. Gestión de dispositivos y altas de agricultores disponibles mediante API, no mediante formularios Angular todavía. No desplegar esta base como producto terminado.
+Hay un flujo fotográfico privado con proveedor IA **simulado**; no hay análisis OpenAI real, predicción ni control remoto de válvula. La telemetría está probada con simulador, **no con ESP32 real**. Alta/habilitación visual de dispositivos para ADMIN propietario disponible; asignación entre cuentas, rotación de claves y administración avanzada pendientes. No desplegar esta base como producto terminado.
 
 ## Especificaciones
 
@@ -277,6 +292,6 @@ El paquete de contratos solo contiene tipos: la validación HTTP se hace en los 
 
 La auditoría de dependencias conserva avisos, registrados en [fase 1](docs/phase-1.md). No se aplicó `npm audit fix --force`, no se desactivó la auditoría y no se considera el proyecto listo para producción. Revisar dependencias antes de publicar o desplegar.
 
-La edición ADMIN, clasificación numérica, límites históricos por vigencia, alertas de desconexión/baja humedad, historial de riego, CSV, eventos separados y fechas personalizadas del gráfico/tabla de humedad están implementados. Falta configurar márgenes explícitos por sonda; no se inventan automáticamente. Cualquier incremento posterior requiere autorización; gestión administrativa completa, fechas personalizadas del historial de riego, diagnóstico IA y clima/predicción siguen pendientes. Todo el alcance de DERCAS se conserva. Resolver el flujo de asignación de parcelas antes de usarlo en campo. Ver [comparación de requisitos](docs/requirements-status.md).
+La edición ADMIN, clasificación numérica, límites históricos por vigencia, alertas de desconexión/baja humedad, historial de riego con fechas personalizadas, CSV, eventos separados y fechas del gráfico/tabla de humedad están implementados. También alta/habilitación visual de equipos, edición/archivo de parcelas propias para ADMIN y diagnóstico fotográfico **simulado** con historial filtrado y comparación manual de fotos. Falta configurar márgenes explícitos por sonda; no se inventan automáticamente. Gestión entre cuentas, rotación/restauración, OpenAI real (en espera) y clima/predicción siguen pendientes. Todo el alcance de DERCAS se conserva. Resolver el flujo de asignación antes de usarlo en campo. Ver [comparación de requisitos](docs/requirements-status.md).
 
 El ESP32 mantiene el control local del riego. Sin calibración, caudal o línea base no se afirmarán litros, ahorro ni umbrales válidos. La IA será orientativa y nunca controlará la válvula.

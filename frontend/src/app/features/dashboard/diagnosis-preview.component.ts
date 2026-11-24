@@ -1,20 +1,30 @@
-import { Component } from '@angular/core';
+import { Component, input } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-diagnosis-preview',
   standalone: true,
+  imports: [RouterLink, IconComponent],
   template: `<section>
-    <span class="eyebrow">PRÓXIMA FASE</span>
+    <span class="eyebrow">DEMO · PROVEEDOR SIMULADO</span>
     <h2>Diagnóstico de plantas con IA</h2>
     <div class="content">
-      <div class="plant" aria-hidden="true">❧</div>
+      <div class="plant" aria-hidden="true">
+        <app-icon name="camera" /><span>Tu próxima fotografía</span>
+      </div>
       <div>
         <h3>Una mirada más a tu cultivo</h3>
         <p>
-          La captura de fotografías y el análisis orientativo se incorporarán en su fase. No se ha
-          analizado ninguna imagen.
+          Prueba la subida privada de fotografías y el historial con consentimiento. El proveedor
+          simulado no evalúa enfermedades reales ni envía fotos a OpenAI.
         </p>
-        <span class="pending">Cámara y análisis aún no disponibles</span>
+        <div class="actions">
+          <a class="capture" routerLink="/diagnostico-ia" [queryParams]="{ plotId: plotId() }">
+            <app-icon name="camera" /> Tomar foto o subir imagen · DEMO
+          </a>
+        </div>
+        <p class="navigation-note">Abre la pantalla de captura para elegir y confirmar tu foto.</p>
       </div>
     </div>
     <p class="info">El análisis será orientativo, no un diagnóstico agronómico definitivo.</p>
@@ -29,7 +39,8 @@ import { Component } from '@angular/core';
         height: 100%;
         background: white;
         border: 1px solid var(--border);
-        border-radius: 14px;
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
         padding: 20px;
       }
       .eyebrow {
@@ -50,10 +61,19 @@ import { Component } from '@angular/core';
       .plant {
         background: #e8f7e6;
         color: #387e3e;
-        font-size: 100px;
+        font-size: 40px;
         line-height: 1.1;
         border-radius: 12px;
-        padding: 12px;
+        padding: 24px 16px;
+        min-width: 125px;
+        text-align: center;
+        border: 1px solid #c8ddc4;
+      }
+      .plant span {
+        display: block;
+        font-size: 10px;
+        margin-top: 14px;
+        line-height: 1.5;
       }
       h3 {
         font-size: 15px;
@@ -64,13 +84,22 @@ import { Component } from '@angular/core';
         color: var(--muted);
         line-height: 1.7;
       }
-      .pending {
-        font-size: 11px;
-        padding: 6px 9px;
-        border-radius: 7px;
-        background: #f2f4ef;
-        color: #526158;
-        display: inline-block;
+      .capture {
+        font-size: 12px;
+        padding: 11px 14px;
+        min-height: 44px;
+        border-radius: 9px;
+        background: var(--green);
+        color: white;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        line-height: 1.5;
+      }
+      .navigation-note {
+        font-size: 10px;
+        margin: 8px 0 0;
       }
       .info {
         background: #e7f3f9;
@@ -93,11 +122,14 @@ import { Component } from '@angular/core';
           gap: 12px;
         }
         .plant {
-          font-size: 70px;
-          padding: 4px;
+          font-size: 32px;
+          min-width: 76px;
+          padding: 16px 8px;
         }
       }
     `,
   ],
 })
-export class DiagnosisPreviewComponent {}
+export class DiagnosisPreviewComponent {
+  readonly plotId = input<string | null>(null);
+}

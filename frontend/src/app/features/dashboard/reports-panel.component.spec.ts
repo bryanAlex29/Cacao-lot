@@ -34,6 +34,20 @@ describe('Panel de reportes', () => {
     expect(fixture.nativeElement.textContent).toContain('DEMO');
     expect(fixture.nativeElement.textContent).toContain('UTC');
   });
+  it('agrupa fechas y acciones, y conserva la explicación sin descargar al desplegarla', async () => {
+    const { fixture, http } = await setup();
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.querySelectorAll('.filter-fields input')).toHaveLength(2);
+    expect(root.querySelector('.filter-actions button.primary')?.textContent).toContain(
+      'Descargar lecturas',
+    );
+    const help = root.querySelector<HTMLDetailsElement>('.panel-help')!;
+    expect(help.open).toBe(false);
+    help.querySelector('summary')!.click();
+    expect(help.open).toBe(true);
+    expect(help.textContent).toContain('UTC');
+    http.expectNone(() => true);
+  });
   it.each(['readings', 'irrigation-events'] as const)(
     'descarga %s con filtros y sin propietario del cliente',
     async (kind) => {

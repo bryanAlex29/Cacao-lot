@@ -3,20 +3,21 @@ import type { TelemetrySubscription } from '@cacaosmart/contracts';
 import { OfflineAlertsPanelComponent } from './offline-alerts-panel.component';
 import { MoistureAlertsPanelComponent } from './moisture-alerts-panel.component';
 import type { ThresholdSensor } from '../../core/sensor-thresholds/sensor-thresholds.types';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-dashboard-insights',
   standalone: true,
-  imports: [OfflineAlertsPanelComponent, MoistureAlertsPanelComponent],
+  imports: [OfflineAlertsPanelComponent, MoistureAlertsPanelComponent, IconComponent],
   template: `<div class="top">
       <section class="water">
-        <h2>Agua y consumo</h2>
+        <h2><app-icon name="water" /> Agua y consumo</h2>
         <p>Consumo <strong>No disponible</strong></p>
         <p>Ahorro <strong>No calculable</strong></p>
         <span class="note">Requiere caudal calibrado y línea base verificable.</span>
       </section>
       <section class="alerts" id="alerts" tabindex="-1">
-        <h2>Alertas</h2>
+        <h2><app-icon name="alert" /> Alertas</h2>
         <app-offline-alerts-panel [selection]="selection()" />
         <app-moisture-alerts-panel [selection]="selection()" [sensors]="sensors()" />
       </section>
@@ -36,22 +37,31 @@ import type { ThresholdSensor } from '../../core/sensor-thresholds/sensor-thresh
         display: grid;
         gap: 14px;
         min-width: 0;
+        align-content: start;
       }
       section {
         background: white;
         border: 1px solid var(--border);
-        border-radius: 14px;
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
         padding: 20px;
         min-width: 0;
       }
       h2 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         font-size: 17px;
         margin: 0 0 18px;
       }
       .top {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+        align-items: start;
         gap: 14px;
+      }
+      h2 app-icon {
+        color: var(--green);
       }
       .note {
         font-size: 11px;

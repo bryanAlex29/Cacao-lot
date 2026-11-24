@@ -1,0 +1,288 @@
+<a class="skip-link" href="#weather-main">Saltar al contenido</a>
+<div class="workspace">
+  <app-sidebar active="weather" [plotId]="plot()?.id ?? null" />
+  <div class="main-area">
+    <app-page-header
+      [title]="plot()?.name ?? 'Clima histórico'"
+      [subtitle]="
+        plot()?.locationLabel ?? (busy() ? 'Consultando parcela…' : 'Parcela no disponible')
+      "
+      section="CONTEXTO AGROCLIMÁTICO"
+      [user]="auth.user()"
+      [canChangePlot]="!!plot()"
+      (signOut)="logout()"
+    />
+    <main id="weather-main" tabindex="-1">
+      <span class="eyebrow">CONTEXTO AGROCLIMÁTICO · FUENTES PÚBLICAS</span>
+      <h1>Clima histórico de la parcela</h1>
+      <p class="notice">
+        Meteorología modelada · ERA5. No son mediciones de tus sensores ni pronósticos. No calcula
+        litros ni decide el riego. La lluvia binaria del ESP32 no equivale a precipitación en mm.
+      </p>
+      <button type="button" (click)="load()" [disabled]="busy()">
+        Actualizar estado del clima
+      </button>
+      @if (busy()) {
+        <p role="status">Consultando…</p>
+      }
+      @if (error()) {
+        <p role="alert">{{ error() }}</p>
+      }
+      @if (message()) {
+        <p class="feedback" role="status">{{ message() }}</p>
+      }
+      @if (plot(); as current) {
+        <p class="plot-context">Parcela seleccionada · {{ current.name }}</p>
+        @if (snapshot(); as data) {
+          @if (data.provider === 'disabled') {
+            <p class="notice">
+              Conexión meteorológica desactivada por el operador. No se envían coordenadas.
+              Activarla requiere confirmar las condiciones de uso no comercial del servicio
+              gratuito.
+            </p>
+          }
+          <section class="location-panel" aria-labelledby="location-title">
+            <div class="panel-heading">
+              <h2 id="location-title"><app-icon name="plots" /> Ubicación para clima</h2>
+              <span class="badge">Configuración privada</span>
+            </div>
+            <p class="help">
+              No se obtiene GPS ni se deducen coordenadas del nombre de la parcela. Introduce una
+              ubicación WGS84 verificada; máximo cinco decimales. Se admiten las zonas horarias de
+              Ecuador.
+            </p>
+            @if (data.profile; as profile) {
+              <p class="profile-summary">
+                Guardado: {{ profile.latitude }}, {{ profile.longitude }} · {{ profile.timezone }} ·
+                versión {{ profile.version }}.
+                {{
+                  profile.enabled
+                    ? 'Envío de coordenadas autorizado'
+                    : 'Sin autorización para consultas externas'
+                }}.
+              </p>
+            } @else {
+              <p>No hay coordenadas registradas para clima.</p>
+            }
+            @if (auth.user()?.role === 'ADMIN') {
+              <form [formGroup]="form" (ngSubmit)="save()">
+                <div class="fields">
+                  <label
+                    >Latitud para clima<input
+                      type="number"
+                      min="-90"
+                      max="90"
+                      step="0.00001"
+                      formControlName="latitude"
+                      [attr.aria-invalid]="
+                        form.controls.latitude.touched && form.controls.latitude.invalid
+                      "
+                      required
+                  /></label>
+                  <label
+                    >Longitud para clima<input
+                      type="number"
+                      min="-180"
+                      max="180"
+                      step="0.00001"
+                      formControlName="longitude"
+                      [attr.aria-invalid]="
+                        form.controls.longitude.touched && form.controls.longitude.invalid
+                      "
+                      required
+                  /></label>
+                  <label
+                    >Zona horaria de la parcela
+                    <select formControlName="timezone">
+                      <option value="America/Guayaquil">
+                        Ecuador continental · America/Guayaquil (UTC−05:00)
+                      </option>
+                      <option value="Pacific/Galapagos">
+                        Galápagos · Pacific/Galapagos (UTC−06:00)
+                      </option>
+                    </select>
+                  </label>
+                </div>
+                <label class="check"
+                  ><input type="checkbox" formControlName="enabled" />
+                  Autorizo enviar estas coordenadas a Open-Meteo para consultas y sincronización
+                  periódica de clima. No se envían nombres, fotos ni credenciales. El proveedor
+                  puede registrar coordenadas y la IP del servidor hasta 90 días.
+                </label>
+                <p class="help">
+                  Guardar sin marcar revoca futuras consultas. Los registros históricos privados se
+                  conservan; una nueva versión no reutiliza los datos de la ubicación anterior.
+                </p>
+                <p>
+                  <a
+                    href="https://open-meteo.com/en/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Condiciones y privacidad de Open-Meteo</a
+                  >.
+                </p>
+                <div class="actions">
+                  <button class="primary" type="submit" [disabled]="busy() || uncertain()">
+                    Guardar ubicación para clima
+                  </button>
+                </div>
+              </form>
+            } @else {
+              <p>
+                Solo ADMIN propietario configura la ubicación y autoriza consultas. FARMER puede
+                consultar los datos almacenados.
+              </p>
+            }
+          </section>
+          <section aria-labelledby="weather-data-title">
+            <div class="panel-heading">
+              <h2 id="weather-data-title">
+                <app-icon name="rain" /> Última semana histórica sincronizada
+              </h2>
+              <span class="badge">ERA5 · Modelado, no pronóstico</span>
+            </div>
+            <p class="help">
+              Importa siete días completos con un margen de siete fechas respecto a hoy para
+              respetar el retraso de ERA5. No ofrece el tiempo actual. Temperatura/humedad: media de
+              24 horas; precipitación/ET₀: suma diaria. Si falta una hora, el agregado es «No
+              disponible», nunca cero de reemplazo.
+            </p>
+            @if (auth.user()?.role === 'ADMIN') {
+              <button
+                class="primary"
+                type="button"
+                (click)="sync()"
+                [disabled]="
+                  busy() || uncertain() || data.provider !== 'open-meteo' || !data.profile?.enabled
+                "
+              >
+                Sincronizar clima histórico
+              </button>
+            }
+            @if (data.profile?.nextAttemptAt; as next) {
+              <p>
+                Próximo intento manual permitido: {{ next | date: 'dd/MM/yyyy HH:mm:ss' }} · hora
+                del navegador.
+              </p>
+            }
+            @if (data.profile?.lastError) {
+              <p role="status">
+                La última sincronización falló. Los datos conservados no son una respuesta nueva.
+              </p>
+            }
+            @if (data.provenance; as source) {
+              <div class="provenance" [class.stale]="isStale()">
+                <h3><app-icon name="history" /> Procedencia de los datos almacenados</h3>
+                <p>{{ source.from }} a {{ source.to }} · días de {{ source.timezone }}.</p>
+                <p>
+                  Consultado {{ source.fetchedAt | date: 'dd/MM/yyyy HH:mm:ss' }} · hora del
+                  navegador.
+                  {{
+                    isStale()
+                      ? 'Consulta antigua: hace más de 36 horas.'
+                      : 'Se muestra la última consulta almacenada.'
+                  }}
+                </p>
+                <p>
+                  Fuente: Open-Meteo / Copernicus Climate Change Service, ECMWF ERA5. Resolución
+                  0,25° (~25 km), original horario, agregado diario. Celda del modelo:
+                  {{ source.gridLatitude }}, {{ source.gridLongitude }}; no necesariamente coincide
+                  con tu punto.
+                </p>
+              </div>
+            }
+            @if (data.items.length) {
+              <div class="table-tools">
+                <label
+                  >Variable meteorológica
+                  <select [formControl]="variableFilter" aria-label="Variable meteorológica">
+                    <option value="">Todas las variables</option>
+                    <option value="temperature_2m">Temperatura media a 2 m</option>
+                    <option value="relative_humidity_2m">Humedad relativa media a 2 m</option>
+                    <option value="precipitation">Precipitación acumulada</option>
+                    <option value="et0_fao_evapotranspiration">ET₀ de referencia</option>
+                  </select>
+                </label>
+                <p class="help">
+                  Filtra solo esta tabla almacenada. No consulta servicios externos.
+                </p>
+              </div>
+              <div
+                class="table-scroll"
+                tabindex="0"
+                role="region"
+                aria-label="Tabla de clima modelado"
+              >
+                <table>
+                  <caption>
+                    Agregados diarios modelados, no observaciones de campo
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Fecha local</th>
+                      <th scope="col">Variable</th>
+                      <th scope="col">Valor</th>
+                      <th scope="col">Calidad</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of data.items; track track(item)) {
+                      @if (!variableFilter.value || item.variable === variableFilter.value) {
+                        <tr>
+                          <td>{{ item.date }}</td>
+                          <th scope="row">{{ names[item.variable] }}</th>
+                          <td>
+                            {{
+                              item.value === null
+                                ? 'No disponible'
+                                : (item.value | number: '1.0-3') + ' ' + item.unit
+                            }}
+                          </td>
+                          <td>
+                            <span class="badge" [class.incomplete]="item.quality === 'missing'">{{
+                              item.quality === 'missing' ? 'Incompleto' : 'Modelado'
+                            }}</span>
+                          </td>
+                        </tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
+            } @else {
+              <p class="empty-state" role="status">
+                No hay datos meteorológicos almacenados para esta versión de ubicación. No se
+                muestran ejemplos.
+              </p>
+            }
+            <p class="notice">
+              ET₀ representa evapotranspiración de referencia de pasto bien regado, no consumo real
+              del cacao. No hay predicción hídrica validada ni recomendación automática de próximo
+              riego.
+            </p>
+            <p class="help attribution">
+              Datos bajo
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >CC BY 4.0</a
+              >.
+              <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer"
+                >Open-Meteo</a
+              >
+              ·
+              <a
+                href="https://open-meteo.com/en/docs/historical-weather-api"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Documentación ERA5</a
+              >. Servicio gratuito solo para uso no comercial; sin garantía de precisión o
+              disponibilidad.
+            </p>
+          </section>
+        }
+      }
+    </main>
+  </div>
+</div>

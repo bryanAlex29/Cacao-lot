@@ -4,11 +4,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { HealthService, SystemHealth } from '../../core/health/health.service';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-system-status',
   standalone: true,
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, RouterLink, IconComponent],
   templateUrl: './system-status.component.html',
   styleUrl: './system-status.component.css',
 })

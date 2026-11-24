@@ -7,7 +7,14 @@
   --border: #e2e7e2;
   --text: #111b15;
   --muted: #526158;
-  font-family: Arial, Helvetica, sans-serif;
+  --radius-card: 18px;
+  --shadow-card: 0 3px 16px #002d1b06;
+  --sidebar-width: 240px;
+  --content-width: 1600px;
+  --page-gutter: 24px;
+  --panel-gap: 16px;
+  --radius-control: 8px;
+  font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
   color: var(--text);
   background: var(--background);
 }
@@ -24,6 +31,26 @@ a {
 }
 button {
   font: inherit;
+}
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+input,
+select,
+textarea {
+  accent-color: var(--green);
+}
+button:not(:disabled):hover {
+  filter: brightness(0.97);
+}
+button:disabled {
+  cursor: not-allowed;
+}
+img {
+  max-width: 100%;
 }
 a {
   color: var(--green);

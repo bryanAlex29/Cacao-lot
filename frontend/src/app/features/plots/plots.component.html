@@ -1,23 +1,14 @@
 <a class="skip-link" href="#plots-main">Saltar al contenido</a>
 <div class="workspace">
-  <aside>
-    <strong class="brand">CacaoSmart IoT</strong>
-    <p>Riego inteligente para<br />cultivos de cacao</p>
-    <nav aria-label="Navegación principal">
-      <a routerLink="/parcelas" aria-current="page" class="active">Mis parcelas</a>
-      <a routerLink="/estado">Estado del sistema</a>
-    </nav>
-    <p class="phase">Monitoreo por parcela<br />Datos reales y DEMO separados</p>
-  </aside>
-  <div>
-    <header>
-      <div>
-        <strong>{{ auth.user()?.name }}</strong><span>{{
-          auth.user()?.role === 'ADMIN' ? 'Administrador' : 'Agricultor'
-        }}</span>
-      </div>
-      <button type="button" class="secondary" (click)="logout()">Cerrar sesión</button>
-    </header>
+  <app-sidebar active="plots" />
+  <div class="main-area">
+    <app-page-header
+      title="Gestión de parcelas"
+      subtitle="Parcelas asociadas a tu cuenta"
+      section="TU CULTIVO, TU INFORMACIÓN"
+      [user]="auth.user()"
+      (signOut)="logout()"
+    />
     <main id="plots-main" tabindex="-1">
       <section class="intro">
         <span class="eyebrow">TU CULTIVO, TU INFORMACIÓN</span>
@@ -28,13 +19,18 @@
         <p class="error" role="alert">{{ error() }}</p>
       }
       @if (message()) {
-        <p role="status">{{ message() }}</p>
+        <p class="success" role="status">{{ message() }}</p>
       }
       @if (canCreate()) {
         <section class="panel" aria-labelledby="create-title">
-          <h2 id="create-title">Registrar una parcela propia</h2>
+          <h2 id="create-title"><app-icon name="leaf" /> Registrar una parcela propia</h2>
           <p>La parcela quedará asociada a tu cuenta. No se crean sensores ni datos de ejemplo.</p>
-          <form [formGroup]="form" (ngSubmit)="create()" [attr.aria-busy]="saving()">
+          <form
+            class="create-form"
+            [formGroup]="form"
+            (ngSubmit)="create()"
+            [attr.aria-busy]="saving()"
+          >
             <div class="fields">
               <label
                 >Nombre<input
@@ -68,9 +64,11 @@
                 Completa nombre y ubicación; la superficie, si se indica, debe ser positiva.
               </p>
             }
-            <button type="submit" [disabled]="saving() || busy()">
-              {{ saving() ? 'Guardando…' : 'Crear parcela' }}
-            </button>
+            <div class="form-actions">
+              <button type="submit" [disabled]="saving() || busy()">
+                {{ saving() ? 'Guardando…' : 'Crear parcela' }}
+              </button>
+            </div>
           </form>
         </section>
       }
@@ -104,12 +102,23 @@
               <article>
                 <span class="tag">PARCELA</span>
                 <h3>{{ plot.name }}</h3>
-                <p>{{ plot.locationLabel }}</p>
-                <p>
+                <p class="plot-location">{{ plot.locationLabel }}</p>
+                <p class="plot-area">
                   Superficie:
                   {{ plot.areaM2 === null ? 'No registrada' : (plot.areaM2 | number) + ' m²' }}
                 </p>
-                <a [routerLink]="['/parcelas', plot.id, 'dashboard']">Abrir panel de monitoreo →</a>
+                <div class="plot-links">
+                  <a class="open-dashboard" [routerLink]="['/parcelas', plot.id, 'dashboard']"
+                    ><app-icon name="monitor" /> Abrir panel de monitoreo →</a
+                  >
+                  <a routerLink="/diagnostico-ia" [queryParams]="{ plotId: plot.id }"
+                    >Diagnóstico IA · DEMO →</a
+                  >
+                  <a [routerLink]="['/parcelas', plot.id, 'clima']">Clima histórico · ERA5 →</a>
+                </div>
+                @if (auth.user()?.role === 'ADMIN') {
+                  <app-plot-management [plot]="plot" (changed)="load(offset())" />
+                }
                 <button
                   type="button"
                   class="secondary inventory-toggle"
@@ -124,7 +133,11 @@
                   }}
                 </button>
                 @if (inventoryPlotId() === plot.id) {
-                  <app-device-inventory [id]="'inventory-' + plot.id" [plotId]="plot.id" />
+                  <app-device-inventory
+                    [id]="'inventory-' + plot.id"
+                    [plotId]="plot.id"
+                    [canManage]="auth.user()?.role === 'ADMIN'"
+                  />
                 }
               </article>
             }
@@ -151,8 +164,8 @@
         </div>
       </section>
       <p class="note">
-        Puedes consultar dispositivos y sensores de tus parcelas. Su alta y habilitación siguen
-        mediante la API autorizada; no se cambian asignaciones desde esta vista. No hay controles de
+        Puedes consultar dispositivos y sensores de tus parcelas. ADMIN propietario puede registrar
+        y habilitar equipos; no se cambian asignaciones desde esta vista. No hay controles de
         válvula, diagnósticos ni cálculos de ahorro.
       </p>
     </main>

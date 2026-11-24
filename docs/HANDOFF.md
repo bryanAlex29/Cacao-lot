@@ -1,8 +1,26 @@
 # Traspaso de trabajo — CacaoSmart IoT
 
+**Entrega actual para Bryan (2026-11-24):**
+[guía de avance, instalación, pruebas y Git](ENTREGA_BRYAN.md) y
+[prompt para auditar antes de desarrollar](PROMPT_BRYAN.md).
+Word en raíz: `CacaoSmart_Avance_y_Traspaso_Bryan.docx`.
+La renovación visual 1–6 y Clima ya están implementados localmente; consultar
+la guía y el inicio de CONTINUAR antes de interpretar pendientes históricos de
+este archivo. No recrear IA/clima ni asumir que están publicados en main.
+
 Guía resumida para el siguiente colaborador: [CONTINUAR.md](CONTINUAR.md). Incluye funciones disponibles, pendientes, comandos de actualización y migración, y los datos privados que no se transfieren por GitHub. Los registros históricos de abajo que dicen «local/sin commit» describen su momento de validación; consultar el historial Git para el estado de publicación.
 
 ## Punto de partida
+
+**Entrega local 6.3 — comparación de fotos:** usuario autorizó «Haz ese incremento». Selección máxima de dos IDs del historial de una parcela; tarjetas privadas con metadata fresca, JPEG autorizado, fechas, notas y resultados DEMO; intercambio, quitar y limpiar. Conserva selección al filtrar/paginar, limpia por cambio de parcela/salida/eliminación. Expiración automática, cancelación y revocación de URL blob. No identifica plantas ni determina mejoría. Sin endpoints, migración o dependencias; OpenAI pospuesto. **960 pruebas aprobadas: 492 Angular + 250 backend + 171 integración + 37 Edge + 10 simulador**; build/tipos/lint correctos. [Guía, incidencias de pruebas y aceptación manual](phase-6-3.md). Sin commit/push/despliegue.
+
+**Entrega local 6.2 — filtros del historial IA:** usuario pidió dejar OpenAI para otro momento y autorizó filtros por fecha/estado. Desde/Hasta inclusivos por creación, opcionales en pareja, máximo 31 días, hora local→UTC; estado opcional pending/completed/failed, total y filas filtrados antes de paginar con RepeatableRead. Borrador/aplicado separados, filtros conservados tras actualización/paginación/alta/eliminación, limpieza y cancelación por selección/logout. Sin migración/dependencias/cambios privados ni fixtures en principal. **935 pruebas correctas: 468 Angular + 250 backend + 171 integración + 36 Edge + 10 simulador**; build/tipos/lint/smoke correctos. Ver [revisión manual y límites](phase-6-2.md). Mantener OpenAI pendiente, no activar proveedor externo ni gastar tokens. Sin commit/push.
+
+**Entrega local 6.1 — diagnóstico fotográfico simulado:** usuario revisó/aprobó 5.15–5.16 y autorizó comenzar IA. Ruta `/diagnostico-ia` por parcela propia ADMIN/FARMER: captura/subida, vista previa, consentimiento demo-v1 y retención máxima aceptada, sanitización sharp sin EXIF, JPEG privado, resultado mock siempre no concluyente, historial/eliminación, cuota diaria serializada e idempotencia. **Sin OpenAI, costos, diagnóstico real ni controles de válvula.** Ver [alcance y prueba manual](phase-6-1.md). Migración aditiva `20261124010000_ai_diagnoses` aplicada localmente con 14 tablas anteriores y `.env` verificados idénticos; cero fixtures en principal. Conserva cambios de gestión y rama `feature/agricultural-management`, sin commit/push. Pendiente revisión manual 6.1; estados inferiores son históricos.
+
+**Validación de 6.1: 900 pruebas correctas** — 459 Angular, 233 backend, 163 integración PostgreSQL/Socket.IO, 35 Edge y 10 simulador. Build/tipos/lint/Prisma correctos; live/ready y frontend disponibles. Angular con configuración serial temporal externa. Integración completa demoró más de 240 s, terminó en segundo plano correctamente y limpió sus ocho bases. Edge verifica selección sin envío, consentimiento, imagen privada, historial/recarga, pérdida de respuesta con reintento idempotente, cancelación/eliminación y móvil 390 px sin desbordamiento. Se corrigió exportación faltante de PlotsService detectada en el primer intento; también una fixture Blob inválida y la aserción antigua de tarjeta IA pendiente, sin ocultar fallos ni ampliar timeouts.
+
+**Entrega local posterior 5.15–5.16:** usuario aprobó manualmente 5.13/5.14 y autorizó continuar con gestión. ADMIN propietario dispone de alta visual de dispositivos con clave efímera mostrada una vez, habilitación confirmada y edición/archivo lógico de parcelas. No amplía permisos FARMER ni asigna recursos ajenos. Rama `feature/agricultural-management`, sin commit/push. Sin migraciones, dependencias ni fixtures en principal. 446 Angular + 209 backend + 151 integración + 34 Edge + 10 simulador = **850 pruebas**; tipos/lint/build/smoke correctos. Ver [guía y límites](phase-5-15-16.md). Pendiente revisión manual del usuario; los estados anteriores más abajo son históricos.
 
 **Entrega para GitHub autorizada por el usuario tras 5.14:** este código incluye 5.13 (fechas del riego) y 5.14 (inventario visual de equipos/sensores). Guía actualizada en [CONTINUAR.md](CONTINUAR.md), sin nuevas migraciones/dependencias respecto a `3ba7bf4`. Los párrafos «local/sin commit/push» de abajo conservan el registro del momento en que se probaron; consultar Git para el estado de publicación. No confundir autorización para publicar con confirmación de prueba manual ni con autorización para ampliar permisos o comenzar otro módulo.
 

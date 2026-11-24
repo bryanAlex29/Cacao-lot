@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import type { ObservedIrrigationEvent, Page, TelemetrySubscription } from '@cacaosmart/contracts';
 import { IrrigationApi } from '../../core/irrigation/irrigation-api.service';
+import { IconComponent } from '../../shared/ui/icon.component';
 import {
   HistoryPeriod,
   historyPeriodFromLocal,
@@ -20,14 +21,15 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
 @Component({
   selector: 'app-irrigation-history',
   standalone: true,
-  imports: [DatePipe, ReactiveFormsModule],
+  imports: [DatePipe, ReactiveFormsModule, IconComponent],
   template: `<section
     tabindex="-1"
     id="irrigation-history"
+    class="data-panel"
     aria-labelledby="irrigation-history-title"
     [attr.aria-busy]="busy()"
   >
-    <h2 id="irrigation-history-title">Historial del riego observado</h2>
+    <h2 id="irrigation-history-title"><app-icon name="tap" /> Historial del riego observado</h2>
     <p>
       Compara estados informados por el dispositivo. No acredita flujo, sesiones ni duración de
       riego.
@@ -38,46 +40,52 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
     @if (!selection()) {
       <p>Selecciona un dispositivo.</p>
     } @else {
-      <div class="controls">
-        @for (value of [1, 7, 30]; track value) {
-          <button
-            type="button"
-            [attr.aria-pressed]="!period() && days() === value"
-            (click)="setDays(value)"
-          >
-            {{ value === 1 ? '24 h' : value + ' días' }}
+      <div class="filter-bar">
+        <div class="period-presets" role="group" aria-label="Periodo del riego observado">
+          @for (value of [1, 7, 30]; track value) {
+            <button
+              type="button"
+              [attr.aria-pressed]="!period() && days() === value"
+              (click)="setDays(value)"
+            >
+              {{ value === 1 ? '24 h' : value + ' días' }}
+            </button>
+          }
+          <button type="button" [disabled]="busy()" (click)="refresh()">
+            Consultar / actualizar historial
           </button>
+        </div>
+        <form
+          [formGroup]="form"
+          (ngSubmit)="applyDates()"
+          aria-label="Fechas del riego observado"
+          novalidate
+        >
+          <div class="filter-fields">
+            <label
+              >Desde del riego (hora local)<input
+                type="datetime-local"
+                step="1"
+                formControlName="from"
+                required
+            /></label>
+            <label
+              >Hasta del riego (hora local)<input
+                type="datetime-local"
+                step="1"
+                formControlName="to"
+                required
+            /></label>
+          </div>
+          <div class="filter-actions">
+            <button class="primary" type="submit">Aplicar fechas al riego</button>
+          </div>
+        </form>
+        @if (periodError()) {
+          <p role="alert">{{ periodError() }}</p>
         }
-        <button type="button" [disabled]="busy()" (click)="refresh()">
-          Consultar / actualizar historial
-        </button>
       </div>
-      <form
-        [formGroup]="form"
-        (ngSubmit)="applyDates()"
-        aria-label="Fechas del riego observado"
-        novalidate
-      >
-        <label
-          >Desde del riego (hora local)<input
-            type="datetime-local"
-            step="1"
-            formControlName="from"
-            required
-        /></label>
-        <label
-          >Hasta del riego (hora local)<input
-            type="datetime-local"
-            step="1"
-            formControlName="to"
-            required
-        /></label>
-        <button type="submit">Aplicar fechas al riego</button>
-      </form>
-      @if (periodError()) {
-        <p role="alert">{{ periodError() }}</p>
-      }
-      <p role="status">
+      <p class="period-status" role="status">
         @if (period(); as selected) {
           Periodo fijo: {{ selected.from | date: 'dd/MM/yyyy HH:mm:ss' }} —
           {{ selected.to | date: 'dd/MM/yyyy HH:mm:ss' }}.
@@ -112,6 +120,9 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
           aria-label="Estados observados del riego"
         >
           <table>
+            <caption>
+              Estados informados por el dispositivo · hora local
+            </caption>
             <thead>
               <tr>
                 <th>Observación (hora local)</th>
@@ -164,7 +175,7 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
         </div>
       }
       @if (checkedAt()) {
-        <div class="controls">
+        <div class="pagination">
           <button
             type="button"
             [disabled]="busy() || page().offset === 0"
@@ -183,116 +194,15 @@ const emptyPage = (): Page<ObservedIrrigationEvent> => ({
         </div>
       }
     }
-    <p>
-      Sin dato no significa cierre. Mensajes atrasados pueden cambiar la comparación histórica. No
-      se conoce el instante físico exacto de la maniobra.
-    </p>
+    <details class="panel-help">
+      <summary>Cómo interpretar el riego observado</summary>
+      <p>
+        Sin dato no significa cierre. Mensajes atrasados pueden cambiar la comparación histórica. No
+        se conoce el instante físico exacto de la maniobra.
+      </p>
+    </details>
   </section>`,
-  styles: [
-    `
-      :host {
-        display: block;
-        min-width: 0;
-        margin-top: 16px;
-      }
-      section {
-        background: white;
-        border: 1px solid #e2e7e2;
-        border-radius: 16px;
-        padding: 16px;
-      }
-      h2 {
-        color: #174b2d;
-        font-size: 20px;
-      }
-      p,
-      table,
-      .controls {
-        font-size: 12px;
-        line-height: 1.6;
-      }
-      p {
-        color: #526158;
-      }
-      .controls {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
-      }
-      form {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: end;
-        gap: 12px;
-        margin-top: 12px;
-      }
-      label {
-        font-size: 12px;
-        min-width: 0;
-      }
-      input {
-        display: block;
-        box-sizing: border-box;
-        width: 100%;
-        min-height: 44px;
-        padding: 8px;
-        border: 1px solid #a9c7ae;
-        border-radius: 8px;
-      }
-      [role='alert'] {
-        color: #8b2020;
-      }
-      button {
-        background: white;
-        border: 1px solid #a9c7ae;
-        color: #17632e;
-        border-radius: 8px;
-        padding: 8px;
-        min-height: 36px;
-        cursor: pointer;
-      }
-      button[aria-pressed='true'] {
-        background: #e8f7e6;
-        font-weight: bold;
-      }
-      button:disabled {
-        opacity: 0.6;
-        cursor: default;
-      }
-      button:focus-visible,
-      input:focus-visible,
-      .table-scroll:focus-visible {
-        outline: 3px solid #1263bd;
-        outline-offset: 2px;
-      }
-      .table-scroll {
-        overflow-x: auto;
-        margin: 12px 0;
-      }
-      table {
-        width: 100%;
-        min-width: 620px;
-        border-collapse: collapse;
-        text-align: left;
-      }
-      th,
-      td {
-        padding: 10px;
-        border-bottom: 1px solid #e2e7e2;
-        vertical-align: top;
-      }
-      small {
-        display: block;
-        color: #526158;
-      }
-      .demo {
-        background: #dceff7;
-        color: #114f70;
-        padding: 8px;
-      }
-    `,
-  ],
+  styleUrl: '../../shared/ui/data-panel.css',
 })
 export class IrrigationHistoryComponent {
   readonly selection = input<TelemetrySubscription | null>(null);

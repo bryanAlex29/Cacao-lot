@@ -5,13 +5,14 @@ import { SensorRangeComponent } from './sensor-range.component';
 import type { SensorRangeState } from '../../core/sensor-thresholds/sensor-thresholds.types';
 import { assessSensor } from '../../core/sensor-thresholds/sensor-assessment';
 import { SensorAssessmentComponent } from './sensor-assessment.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-soil-sensor-card',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, SensorRangeComponent, SensorAssessmentComponent],
+  imports: [DatePipe, DecimalPipe, SensorRangeComponent, SensorAssessmentComponent, IconComponent],
   template: `<article [class.missing]="assessment().value === null">
-    <span class="leaf" aria-hidden="true">♧</span>
+    <span class="leaf"><app-icon name="leaf" /></span>
     <h3>Sensor {{ number() }}</h3>
     <p>Zona {{ zone() }}</p>
     <strong

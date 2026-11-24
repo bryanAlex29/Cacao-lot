@@ -1,6 +1,105 @@
 # Resumen para continuar CacaoSmart IoT
 
+## Entrega a Bryan — probar antes de desarrollar
+
+**Preparación para publicación autorizada:** código completo, migraciones,
+Word y guías incluidos en el commit local de entrega de
+`feature/agricultural-management`; comprobar hash con `git log -1 --oneline`.
+Falta solo `git push -u origin feature/agricultural-management`.
+Build/lint y 534 pruebas Angular revalidados; backend: 15 suites y 251 pruebas
+correctas, 1 suite bloqueada por el TS2322 conocido de clima. No se corrigió
+funcionalidad ni se hizo push. La inspección siguiente es anterior al commit.
+
+Guía actual de preparación, pruebas manuales/automáticas, límites y publicación:
+[ENTREGA_BRYAN.md](ENTREGA_BRYAN.md). Prompt copiable:
+[PROMPT_BRYAN.md](PROMPT_BRYAN.md). Versión Word en la raíz:
+`CacaoSmart_Avance_y_Traspaso_Bryan.docx`.
+
+Al redactarla, los avances recientes seguían sin commit en
+`feature/agricultural-management` sobre `9fe2dc1`; subir solo el documento no
+transfiere el código. No se hizo commit/push. Bryan debe recibir el commit
+publicado completo, probar primero en localhost y reportar antes de desarrollar.
+Las instrucciones inferiores sobre actualizar solo main y no requerir nuevas
+migraciones corresponden a 5.13/5.14: **no son suficientes para IA/clima**.
+El acceso/login por LAN quedó pendiente por decisión del usuario; no desactivar
+la protección de origen para solucionarlo.
+
 ## Estado de la entrega
+
+**Renovación visual, incremento 6 + revisión transversal (2026-11-24):** usuario
+autorizó Clima/estado y adaptar el conjunto al objetivo visual. Clima con filtro
+local sin peticiones, procedencia y estados de calidad; estado técnico diferencia
+API/PostgreSQL y corrige textos de fases antiguas. Estructura compartida
+`shared/ui/workspace.css`: sidebar 240 px y corte móvil 900 px, márgenes comunes
+en Dashboard/Parcelas/IA/Clima; encabezados y tarjetas armonizados, salto a
+contenido en IA/Clima. **534 Angular + 43 Edge correctas**; build/lint/tipos
+frontend/formato/diff/smoke y web HTTP 200 correctos.
+Ver [archivos, alcance y revisión](visual-refresh-6.md). Capturas sintéticas
+revisadas en `Temp/opencode/cacaosmart-browser-ayRRoi`. Sin cambios API,
+permisos, reglas físicas, datos principal, dependencias, commit/push o despliegue.
+Pendiente revisión del usuario y aportar imagen original/fotografías para
+fidelidad exacta. OpenAI continúa pospuesto; no hay predicción hídrica validada.
+
+**Renovación visual, incremento 5 (2026-11-24):** autorizado con «Sigue haciendo».
+IA con guía de captura/vista previa, resultado estructurado y estados del
+historial; login/registro con tarjeta coherente, foco/ayuda y nota de sesión
+corregida (renovable hasta 8 horas, sin tocar autenticación).
+**530 Angular + 41 Edge correctas**; build/lint/tipos frontend/smoke/HTTP 200
+correctos. Ver [alcance, archivos y revisión](visual-refresh-5.md).
+Sin cambios de contratos, cuotas, privacidad, permisos, dependencias o datos
+principal; sin commit/push. Próximo sugerido: Clima/estado del sistema.
+OpenAI, captura original y fotografías siguen pendientes.
+
+**Renovación visual, incremento 4 (2026-11-24):** usuario autorizó formularios e
+inventario de Parcelas/dispositivos. Alta/edición/archivo y habilitación con
+acciones coherentes, confirmaciones en línea, foco y Escape seguro. Equipos antes
+de administración; alta plegada, clave nueva visible por separado y conservada
+al refrescar inventario hasta ocultarla. **526 Angular + 40 Edge correctas**;
+build/lint/tipos frontend correctos. Ver [alcance y revisión](visual-refresh-4.md).
+Sin API/dependencias/permisos ni datos nuevos en principal; cambios sin commit.
+Pendiente revisión manual; siguiente paso propuesto: presentación de IA y
+login/registro. OpenAI, captura original y fotografías siguen pendientes.
+
+**Renovación visual, incremento 3 (2026-11-24):** usuario aprobó el incremento 2.
+Encabezado compartido de parcela/cuenta en Dashboard, Parcelas, IA y Clima;
+enlace real para cambiar parcela, rol y salida comunes. Solo Dashboard recibe
+conexión/fecha de telemetría; sin estados decorativos en las otras pantallas.
+Salida desde IA/Clima limpia estado mediante los servicios de sesión existentes.
+**518 Angular + 40 Edge correctas**, build/lint/tipos frontend correctos.
+Ver [alcance, pruebas y revisión](visual-refresh-3.md). Sin datos de prueba en
+principal, cambios de API, dependencias, commit o push. Pendiente revisión manual;
+siguiente incremento sugerido: formularios/diálogos/inventario de Parcelas y
+dispositivos. Captura original y fotografías siguen pendientes.
+
+**Renovación visual, incremento 2 (2026-11-24):** compactados los paneles de
+alertas sin esconder condición, fechas o reconocimiento; evidencia y reglas
+desplegables con teclado. Filtros, acciones y tablas de histórico/riego/CSV
+unificados mediante estilos compartidos. **506 Angular + 38 Edge correctas**;
+build/lint/tipos frontend correctos. Sin cambios en API, consultas, permisos,
+reglas físicas ni base principal. Ver [alcance y revisión](visual-refresh-2.md).
+Pendiente revisión manual; siguiente paso: encabezado común de parcela/cuenta.
+Captura original y fotografías siguen pendientes. Los resultados inferiores
+corresponden a entregas anteriores; no sumar sus pruebas.
+
+**Renovación visual, incremento 1 (2026-11-24):** usuario autorizó iniciar el
+rediseño y abrir servicios/web. Navegación compartida entre dashboard, Parcelas,
+IA y Clima; iconos SVG, menú móvil, ajustes de tarjetas/formularios/comparación y
+rangos con detalles desplegables. No es el rediseño completo: falta la captura
+original y las fotografías, además de compactar alertas y pulir los demás
+paneles. Ver [alcance, revisión y pendientes](visual-refresh-1.md). Conservar todo
+el trabajo previo sin commit; OpenAI continúa pospuesto.
+Verificación: 499 Angular + 38 Edge correctas, build/lint/tipos frontend/smoke
+correctos. La suite global sigue bloqueada por TS2322 en una prueba de clima no
+modificada (`backend/src/weather/open-meteo.spec.ts:37`); no confundir con una
+regresión visual ni declarar todas las pruebas aprobadas.
+
+**Actualización local 6.3:** comparación privada de dos fotografías de la misma parcela autorizada e implementada. Selección entre páginas/filtros, fotos/fechas/notas/resultados DEMO, intercambio A/B y limpieza; permisos y vigencia revalidados por tarjeta. Sin análisis nuevo, migraciones o dependencias. **960 pruebas aprobadas** (492 Angular, 250 backend, 171 integración, 37 Edge, 10 simulador); build/tipos/lint correctos. Ver [guía y revisión manual](phase-6-3.md). OpenAI explícitamente en espera. Pendiente revisión manual del usuario; cambios sin commit/push.
+
+**Actualización local 6.2:** usuario pidió posponer OpenAI y autorizó filtros. Historial de diagnósticos con fechas Desde/Hasta inclusivas por creación y estado, periodo fijo UTC, paginación/actualización conservadas y limpieza. Sin migraciones/dependencias ni fixtures en principal. **OpenAI a la espera de autorización futura**, sin claves/costos externos. Ver [guía y revisión](phase-6-2.md). 935 pruebas correctas; pendiente revisión manual 6.2.
+
+**Actualización local 6.1:** usuario aprobó 5.15–5.16 y autorizó diagnóstico fotográfico. Implementados captura/subida, consentimiento, sanitización, almacenamiento privado, resultado simulado no concluyente, historial/eliminación, cuota e idempotencia por parcela propia ADMIN/FARMER. **No conecta OpenAI ni genera costos.** Ver [guía y límites](phase-6-1.md). Migración aplicada preservando 14 tablas anteriores y `.env`; sin diagnósticos de prueba en principal. Pendiente revisión manual 6.1; entregas inferiores son históricas.
+
+**Actualización local 5.15–5.16:** usuario revisó y aprobó 5.13/5.14 y autorizó avanzar en gestión. Implementados formularios ADMIN propietario para alta de dispositivos con clave de una sola visualización, habilitación confirmada, edición y archivo lógico de parcelas. FARMER mantiene permisos anteriores. Sin migraciones, dependencias, provisión en la principal ni cambios de rol. Ver [alcance, límites y revisión manual](phase-5-15-16.md). Cambios en `feature/agricultural-management`, aún sin commit/push. Las cifras/estados de publicación siguientes son históricos de 5.14.
 
 **Entrega vigente: fases 5.13 y 5.14 incluidas en este código.** El usuario autorizó publicarlas en GitHub para que continúe su compañero. No hay nuevas migraciones ni dependencias respecto a `3ba7bf4`. Los documentos de fase registran su estado de validación previo a esta publicación; consultar Git para el commit y la sincronización remota.
 
@@ -28,10 +127,10 @@ Base anterior: **fase 5.12 y corrección de renovación de sesión**. Stack: Ang
 
 ## Lo que falta
 
-1. **Revisión manual del usuario** del inventario 5.14 antes de otra funcionalidad. La sesión renovable requiere iniciar sesión una vez si procede de una versión anterior sin cookie.
-2. Revisar manualmente fechas personalizadas del historial de riego observado (5.13). Presets 24 h/7/30 días conservados; filtros independientes del gráfico y CSV.
-3. Gestión Angular completa de dispositivos (inventario solo lectura disponible en 5.14), edición/archivo de parcelas y configuración; definir provisión/asignación de equipos para agricultores con permisos explícitos. No solucionarlo otorgando ADMIN o acceso global.
-4. Diagnóstico IA: captura/subida, consentimiento, validación, almacenamiento privado, historial, cuotas y proveedor simulado; OpenAI real después, con credenciales exclusivamente backend y presupuesto autorizado.
+1. **Revisión manual de 6.3**: Diagnóstico IA · DEMO → historial → elegir dos fotos → Ver comparación → intercambiar/quitar/limpiar.
+2. El mock seguirá dando respuestas genéricas similares: es esperado, no evalúa enfermedades reales. No modificarlo para inventar resultados variados. Comparación manual ya implementada, no infiere evolución.
+3. Gestión adicional: asignación a agricultores ajenos al administrador, recuperación/rotación de claves, restauración, edición de sensores/intervalos y configuración requieren diseño y permisos explícitos. No solucionarlo otorgando ADMIN o acceso global.
+4. Diagnóstico IA: comparación y filtros ya existen. **OpenAI real pospuesto explícitamente por el usuario**, solo retomarlo con autorización, consentimiento externo nuevo, presupuesto y configuración backend.
 5. Clima público con procedencia/licencia/unidades verificadas; predicción con target/horizonte, baseline/regresión y evaluación cronológica. No existen resultados predictivos validados.
 6. Integración auténtica ESP32/receptor: contrato, protocolo, identidad, frecuencia, muestras y calibración. No modificar firmware ni política multizona sin autorización y prueba de seguridad.
 7. Litros, duración física y ahorro: faltan evidencia temporal, caudal calibrado, área/eficiencia donde corresponda y línea base. Mantener «No disponible»; una orden de relé no confirma flujo.
@@ -73,7 +172,7 @@ npm run db:migrate
 
 Iniciar `npm run dev:backend` y `npm run dev:frontend` en terminales separadas. Abrir http://localhost:4200 y comprobar `/estado`. Las funciones de cookie requieren el origen frontend configurado y proxy del mismo origen; no ampliar CORS para ocultar errores.
 
-Crear una rama para **un solo incremento**, acordarlo con el usuario, presentar archivos/aceptación y verificar antes de continuar. Fechas personalizadas de riego (5.13) e inventario solo lectura (5.14) ya implementados: solicitar revisión de la última entrega y después acordar el siguiente pendiente. Ver [CONTRIBUTING](../CONTRIBUTING.md) para trabajo en ramas y Pull Requests.
+Continuar por incrementos verificables. Gestión, diagnóstico simulado, filtros 6.2 y comparación 6.3 ya existen; pendiente revisión manual de comparación. No recrearlos ni conectar proveedores externos: OpenAI está explícitamente pospuesto. Ver [CONTRIBUTING](../CONTRIBUTING.md) para trabajo en ramas y Pull Requests.
 
 ## Lo que GitHub no transfiere
 

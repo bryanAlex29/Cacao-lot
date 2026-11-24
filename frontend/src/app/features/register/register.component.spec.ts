@@ -35,6 +35,23 @@ describe('Formulario de registro', () => {
     expect(register).not.toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('Las contraseñas deben coincidir');
   });
+  it('etiquetas y ayuda accesible conservan política y no ofrecen rol administrativo', async () => {
+    const { fixture, component, register } = await create();
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+    for (const input of Array.from(root.querySelectorAll('input[aria-describedby]'))) {
+      expect(root.querySelector('#' + input.getAttribute('aria-describedby'))).not.toBeNull();
+    }
+    component.submit();
+    fixture.detectChanges();
+    for (const input of Array.from(root.querySelectorAll('input[aria-describedby]'))) {
+      expect(root.querySelector('#' + input.getAttribute('aria-describedby'))).not.toBeNull();
+    }
+    expect(root.querySelector('.privacy')?.textContent).toContain('sin permisos de administrador');
+    expect(root.querySelector('#password-help')?.textContent).toContain('8 y 128');
+    expect(root.querySelectorAll('input[autocomplete="new-password"]')).toHaveLength(2);
+    expect(register).not.toHaveBeenCalled();
+  });
 
   it('envía solo nombre, correo y contraseña, limpia secretos y entra a parcelas', async () => {
     const { component, register, navigation } = await create();

@@ -10,6 +10,7 @@ import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../../core/auth/auth.service';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 export function matchingPasswords(control: AbstractControl): ValidationErrors | null {
   return control.get('password')?.value === control.get('confirmPassword')?.value
@@ -20,7 +21,7 @@ export function matchingPasswords(control: AbstractControl): ValidationErrors | 
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, IconComponent],
   templateUrl: './register.component.html',
   styleUrls: ['../login/login.component.css', './register.component.css'],
 })

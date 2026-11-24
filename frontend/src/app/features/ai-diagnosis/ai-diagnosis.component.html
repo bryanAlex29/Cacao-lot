@@ -1,0 +1,488 @@
+<a class="skip-link" href="#diagnosis-main">Saltar al contenido</a>
+<div class="workspace">
+  <app-sidebar active="diagnosis" [plotId]="plot()?.id ?? null" />
+  <div class="main-area">
+    <app-page-header
+      [title]="plot()?.name ?? 'Diagnóstico IA'"
+      [subtitle]="
+        plot()?.locationLabel ??
+        (loading() ? 'Consultando parcela…' : 'Elige una parcela desde Mis parcelas')
+      "
+      section="SALUD DEL CULTIVO"
+      [user]="auth.user()"
+      [canChangePlot]="!!plot()"
+      (signOut)="logout()"
+    />
+    <main id="diagnosis-main" tabindex="-1">
+      <span class="eyebrow">SALUD DEL CULTIVO · FOTOGRAFÍAS PRIVADAS</span>
+      <h1>Diagnóstico de plantas con IA</h1>
+      <p class="notice">
+        DEMO · Proveedor simulado. No se evalúan enfermedades reales ni se envían fotos a OpenAI. No
+        controla el riego. Análisis orientativo, no diagnóstico definitivo.
+      </p>
+      @if (loading()) {
+        <p role="status">Consultando parcela y límites…</p>
+      }
+      @if (error()) {
+        <p role="alert">{{ error() }}</p>
+      }
+      @if (plot(); as current) {
+        <p class="plot-context">Parcela seleccionada · {{ current.name }}</p>
+        @if (options(); as limits) {
+          @if (limits.provider === 'disabled') {
+            <p role="status">El diagnóstico no está habilitado en este entorno.</p>
+          } @else {
+            <section class="capture-panel" aria-labelledby="upload-title" [attr.aria-busy]="busy()">
+              <div class="panel-heading">
+                <h2 id="upload-title"><app-icon name="camera" /> Fotografía de la planta</h2>
+                <span class="badge">1 · Captura y consentimiento</span>
+              </div>
+              <p class="help">
+                JPEG, PNG o WebP estático; máximo {{ limits.maxImageBytes / 1048576 }} MB y 25
+                megapíxeles. Se elimina EXIF/geolocalización en el servidor y se guarda una copia
+                JPEG privada. Evita incluir personas, documentos o información privada en la foto y
+                las notas.
+              </p>
+              <div class="capture-tools">
+                <div class="photo-guide">
+                  <app-icon name="leaf" />
+                  <strong>Una foto clara para observar tu planta</strong>
+                  <p>
+                    Enfoca la hoja, fruto o tallo con buena luz. Elegir una foto no la envía al
+                    servidor.
+                  </p>
+                  <div class="actions">
+                    <label class="file-button primary"
+                      ><app-icon name="camera" /> Tomar foto
+                      <input
+                        aria-label="Tomar foto de la planta"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        capture="environment"
+                        [disabled]="busy() || uncertain()"
+                        (change)="selectFile($event)"
+                      />
+                    </label>
+                    <label class="file-button"
+                      ><app-icon name="upload" /> Subir imagen
+                      <input
+                        aria-label="Subir imagen de la planta"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        [disabled]="busy() || uncertain()"
+                        (change)="selectFile($event)"
+                      />
+                    </label>
+                  </div>
+                  <p>
+                    La cámara depende del navegador/dispositivo; puedes usar la galería como
+                    alternativa.
+                  </p>
+                </div>
+                <div class="capture-review">
+                  @if (preview(); as image) {
+                    <p class="badge" role="status">Foto elegida · Aún no enviada</p>
+                    <img
+                      class="preview"
+                      [src]="image"
+                      alt="Vista previa de la foto elegida, aún no enviada"
+                    />
+                    <label
+                      >Síntomas observados (opcional)
+                      <textarea [formControl]="notes" maxlength="1000" rows="3"></textarea>
+                    </label>
+                    <p class="help">
+                      Cuota: {{ limits.dailyLimit }} intentos por usuario y día UTC. Los fallos y
+                      eliminados también cuentan. Retención máxima: {{ limits.retentionDays }} días;
+                      puedes eliminar antes desde el historial. Al eliminar se retiran foto y
+                      resultado; la referencia del intento se conserva hasta vencer para evitar
+                      duplicados y controlar cuota. La limpieza física se ejecuta al iniciar el
+                      backend y cada minuto mientras esté activo.
+                    </p>
+                    <label class="check">
+                      <input type="checkbox" [formControl]="consent" />
+                      Autorizo procesar y guardar esta foto y mis notas de forma privada en este
+                      servidor, por hasta {{ limits.retentionDays }} días, para una demostración
+                      simulada (demo-v1). Entiendo que no es un análisis real y no se enviará a un
+                      proveedor externo.
+                    </label>
+                    <div class="actions">
+                      <button
+                        class="primary"
+                        type="button"
+                        [disabled]="busy() || !consent.value"
+                        (click)="submit()"
+                      >
+                        {{
+                          busy()
+                            ? 'Procesando demostración…'
+                            : uncertain()
+                              ? 'Reintentar misma solicitud'
+                              : 'Confirmar análisis simulado'
+                        }}
+                      </button>
+                      <button type="button" [disabled]="busy()" (click)="clearUpload()">
+                        {{
+                          uncertain()
+                            ? 'Descartar intento y revisar historial antes de otra foto'
+                            : 'Quitar foto'
+                        }}
+                      </button>
+                    </div>
+                    @if (uncertain()) {
+                      <p role="status">
+                        No hubo confirmación. Reintentar conserva la misma solicitud; una nueva foto
+                        puede consumir otro intento. Consulta primero el historial.
+                      </p>
+                    }
+                  } @else {
+                    <div class="empty-preview">
+                      <app-icon name="camera" />
+                      <strong>Vista previa de tu fotografía</strong>
+                      <p>
+                        Selecciona una imagen para revisar las notas y autorizar su procesamiento
+                        simulado.
+                      </p>
+                    </div>
+                  }
+                </div>
+              </div>
+            </section>
+            @if (selected(); as record) {
+              <section class="result-panel" aria-labelledby="result-title">
+                <div class="panel-heading">
+                  <h2 id="result-title"><app-icon name="report" /> Resultado · DEMO</h2>
+                  <span class="badge">2 · Evaluación orientativa</span>
+                </div>
+                <p class="help">
+                  {{ record.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }} · hora local. Vence
+                  {{ record.expiresAt | date: 'dd/MM/yyyy HH:mm' }}.
+                </p>
+                <div class="result-layout">
+                  <div class="result-photo">
+                    @if (imageUrl(); as image) {
+                      <img
+                        class="preview"
+                        [src]="image"
+                        alt="Fotografía privada del análisis seleccionado"
+                      />
+                    }
+                    @if (imageError()) {
+                      <p role="alert">{{ imageError() }}</p>
+                    }
+                    @if (!imageUrl() && !imageError()) {
+                      <p class="help">
+                        {{
+                          record.hasImage
+                            ? 'La fotografía privada se está recuperando.'
+                            : 'Sin fotografía conservada.'
+                        }}
+                      </p>
+                    }
+                  </div>
+                  <div class="result-content">
+                    @if (record.status === 'pending') {
+                      <p role="status">
+                        Solicitud pendiente. Actualizar consulta el estado sin reenviar la
+                        fotografía. Si se interrumpió el servidor, el estado se recupera durante la
+                        limpieza.
+                      </p>
+                    } @else if (record.status === 'failed') {
+                      <p role="alert">
+                        No se pudo completar el análisis. No hay diagnóstico ni resultado inventado.
+                      </p>
+                    } @else if (record.result; as result) {
+                      <p class="notice">{{ result.disclaimer }}</p>
+                      <div class="result-block">
+                        <h3>Observaciones de demostración</h3>
+                        <ul>
+                          @for (symptom of result.visibleSymptoms; track $index) {
+                            <li>{{ symptom }}</li>
+                          }
+                        </ul>
+                      </div>
+                      <div class="result-block">
+                        <h3>Posibles causas</h3>
+                        <ul>
+                          @for (cause of result.possibleCauses; track $index) {
+                            <li>{{ cause.name }}: {{ cause.reason }}</li>
+                          } @empty {
+                            <li>No evaluadas por el proveedor simulado.</li>
+                          }
+                        </ul>
+                      </div>
+                      <p class="uncertainty">
+                        Incertidumbre: {{ result.uncertainty === 'high' ? 'Alta' : 'Media' }}.
+                        Requiere revisión técnica.
+                      </p>
+                      <div class="result-block next-steps">
+                        <h3>Próximos pasos</h3>
+                        <ul>
+                          @for (action of result.recommendedActions; track $index) {
+                            <li>{{ action }}</li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                  </div>
+                </div>
+                <button type="button" (click)="refreshSelected()">
+                  Actualizar estado del análisis
+                </button>
+              </section>
+            }
+            <section aria-labelledby="history-title" [attr.aria-busy]="historyBusy()">
+              <div class="panel-heading">
+                <h2 id="history-title">
+                  <app-icon name="history" /> Historial privado de diagnósticos · DEMO
+                </h2>
+                <span class="badge">3 · Consulta y comparación</span>
+              </div>
+              <form
+                [formGroup]="historyForm"
+                (ngSubmit)="applyHistoryFilters()"
+                aria-label="Filtros del historial de diagnósticos"
+              >
+                <div class="history-filters">
+                  <label
+                    >Desde del diagnóstico (hora local)
+                    <input type="datetime-local" step="1" formControlName="from" />
+                  </label>
+                  <label
+                    >Hasta del diagnóstico (hora local)
+                    <input type="datetime-local" step="1" formControlName="to" />
+                  </label>
+                  <label
+                    >Estado del diagnóstico
+                    <select formControlName="status" aria-label="Estado del diagnóstico">
+                      <option value="">Todos los estados</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="completed">Completado</option>
+                      <option value="failed">Fallido</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="actions">
+                  <button class="primary" type="submit" [disabled]="deleting()">
+                    Aplicar filtros de diagnósticos
+                  </button>
+                  <button type="button" [disabled]="deleting()" (click)="clearHistoryFilters()">
+                    Limpiar filtros de diagnósticos
+                  </button>
+                </div>
+              </form>
+              <p class="help">
+                Filtra por fecha de creación, con ambos extremos incluidos. Hora local del navegador
+                ({{ timezone }}), convertida a UTC; máximo 31 días por periodo. Deja ambas fechas
+                vacías para consultar todos los registros conservados. Solo afecta al listado, no a
+                la foto sin enviar ni al análisis abierto. No recupera registros vencidos o
+                eliminados.
+              </p>
+              <p class="notice" role="status" data-history-filters>
+                Filtro aplicado:
+                {{
+                  historyFilters().status === 'pending'
+                    ? 'Pendiente'
+                    : historyFilters().status === 'completed'
+                      ? 'Completado'
+                      : historyFilters().status === 'failed'
+                        ? 'Fallido'
+                        : 'Todos los estados'
+                }}.
+                @if (historyFilters().from) {
+                  Periodo fijo: {{ historyFilters().from | date: 'dd/MM/yyyy HH:mm:ss' }} –
+                  {{ historyFilters().to | date: 'dd/MM/yyyy HH:mm:ss' }}.
+                } @else {
+                  Todas las fechas conservadas.
+                }
+              </p>
+              @if (filterError()) {
+                <p role="alert">{{ filterError() }} Se conserva el filtro aplicado.</p>
+              }
+              <button type="button" [disabled]="historyBusy()" (click)="loadHistory(offset())">
+                Actualizar diagnósticos
+              </button>
+              @if (historyBusy()) {
+                <p role="status">Consultando historial…</p>
+              }
+              @if (historyError()) {
+                <p role="alert">{{ historyError() }}</p>
+              }
+              @for (record of history(); track record.id) {
+                <article class="diagnosis-record">
+                  <div class="record-heading">
+                    <p class="record-date">
+                      {{ record.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }} · hora local
+                    </p>
+                    <span
+                      class="badge"
+                      [class.failed]="record.status === 'failed'"
+                      [class.pending]="record.status === 'pending'"
+                    >
+                      {{
+                        record.status === 'completed'
+                          ? 'Completado · simulado'
+                          : record.status === 'failed'
+                            ? 'Fallido'
+                            : 'Pendiente'
+                      }}
+                    </span>
+                  </div>
+                  <div class="actions record-actions">
+                    <button type="button" (click)="open(record)">Ver análisis</button>
+                    <button
+                      type="button"
+                      [attr.aria-pressed]="comparisonIds().includes(record.id)"
+                      [disabled]="
+                        deleting() ||
+                        (!comparisonIds().includes(record.id) &&
+                          (comparisonIds().length >= 2 ||
+                            !record.hasImage ||
+                            record.status === 'pending'))
+                      "
+                      (click)="toggleComparison(record)"
+                    >
+                      {{
+                        comparisonIds().includes(record.id)
+                          ? 'Quitar de comparación'
+                          : 'Añadir a comparación'
+                      }}
+                    </button>
+                  </div>
+                  <button
+                    class="danger"
+                    type="button"
+                    [disabled]="deleting() || record.status === 'pending'"
+                    (click)="deleteTarget.set(record)"
+                  >
+                    Eliminar análisis
+                  </button>
+                </article>
+              } @empty {
+                @if (!historyBusy() && !historyError()) {
+                  <p class="empty-state">
+                    No hay diagnósticos disponibles con los filtros aplicados en esta parcela.
+                  </p>
+                }
+              }
+              @if (deleteTarget()) {
+                <div
+                  class="delete-confirmation"
+                  role="group"
+                  aria-label="Confirmar eliminación del análisis"
+                >
+                  <p>
+                    ¿Eliminar el resultado y su foto privada? No se puede deshacer y no devuelve
+                    cuota diaria.
+                  </p>
+                  <button
+                    class="danger-solid"
+                    type="button"
+                    [disabled]="deleting()"
+                    (click)="remove()"
+                  >
+                    Confirmar eliminación
+                  </button>
+                  <button type="button" [disabled]="deleting()" (click)="deleteTarget.set(null)">
+                    Cancelar eliminación
+                  </button>
+                </div>
+              }
+              <div class="actions pagination">
+                <button
+                  type="button"
+                  [disabled]="historyBusy() || offset() === 0"
+                  (click)="loadHistory(offset() - 10)"
+                >
+                  Diagnósticos anteriores
+                </button>
+                <span>Página {{ offset() / 10 + 1 }} · {{ total() }} registros</span>
+                <button
+                  type="button"
+                  [disabled]="historyBusy() || offset() + 10 >= total()"
+                  (click)="loadHistory(offset() + 10)"
+                >
+                  Diagnósticos siguientes
+                </button>
+              </div>
+              <p role="status">
+                {{ comparisonIds().length }} de 2 fotos seleccionadas para comparar.
+              </p>
+              <button
+                type="button"
+                [disabled]="!comparisonIds().length"
+                (click)="comparisonPanel.focus(); comparisonPanel.scrollIntoView()"
+              >
+                Ver comparación
+              </button>
+            </section>
+            <section
+              #comparisonPanel
+              id="diagnosis-comparison"
+              tabindex="-1"
+              aria-labelledby="comparison-title"
+            >
+              <h2 id="comparison-title">
+                <app-icon name="plots" /> Comparación de fotografías · DEMO
+              </h2>
+              <p class="notice">
+                Comparación visual manual, sin análisis nuevo ni consumo de tokens. No confirma
+                mejoría, empeoramiento, enfermedad ni eficacia de un tratamiento. Los resultados son
+                simulados y pueden ser idénticos.
+              </p>
+              <p>
+                Elige hasta dos fotos distintas del historial de esta parcela. Verifica que
+                correspondan a la misma planta: la aplicación no identifica plantas ni confirma que
+                sean la misma. La fecha mostrada es la creación del diagnóstico, no la fecha de
+                captura de la cámara.
+              </p>
+              <p>
+                La selección se conserva al filtrar o paginar, aunque las fotos elegidas no estén en
+                la página visible. Se limpia al salir o cambiar de parcela. Usa Actualizar Foto A/B
+                para volver a comprobar el acceso y recuperar la imagen.
+              </p>
+              <div class="actions">
+                <button
+                  type="button"
+                  [disabled]="comparisonIds().length !== 2"
+                  (click)="swapComparison()"
+                >
+                  Intercambiar fotos
+                </button>
+                <button
+                  type="button"
+                  [disabled]="!comparisonIds().length"
+                  (click)="comparisonIds.set([])"
+                >
+                  Limpiar comparación
+                </button>
+              </div>
+              @if (comparisonIds().length < 2) {
+                <p role="status">
+                  Selecciona
+                  {{ comparisonIds().length === 0 ? 'dos fotos' : 'una segunda foto' }} con Añadir a
+                  comparación. Solo están disponibles los diagnósticos finalizados con fotografía
+                  conservada.
+                </p>
+              }
+              <div class="comparison-grid">
+                @for (id of comparisonIds(); track id; let index = $index) {
+                  <div class="comparison-slot">
+                    <button type="button" (click)="removeComparison(id)">
+                      Quitar Foto {{ index === 0 ? 'A' : 'B' }}
+                    </button>
+                    <app-diagnosis-comparison-card
+                      [plotId]="current.id"
+                      [diagnosisId]="id"
+                      [label]="index === 0 ? 'Foto A' : 'Foto B'"
+                    />
+                  </div>
+                }
+              </div>
+            </section>
+          }
+        }
+      }
+    </main>
+  </div>
+</div>

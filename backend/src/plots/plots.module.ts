@@ -12,5 +12,6 @@ import { IntegrationsModule } from '../integrations/integrations.module';
   imports: [DatabaseModule, IntegrationsModule],
   providers: [PlotsRepository, PlotsService, DevicesRepository, DevicesService],
   controllers: [PlotsController, DevicesController],
+  exports: [PlotsService],
 })
 export class PlotsModule {}

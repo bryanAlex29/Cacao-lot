@@ -132,7 +132,10 @@ describe('Dashboard de tres zonas', () => {
     expect(element.textContent).toContain('Zona C');
     expect(element.textContent).toContain('Sin datos');
     expect(element.textContent).toContain('No calculable');
-    expect(element.textContent).toContain('No se ha analizado ninguna imagen');
+    expect(element.textContent).toContain('El proveedor simulado no evalúa enfermedades reales');
+    expect(element.querySelector('app-diagnosis-preview a')?.getAttribute('href')).toContain(
+      '/diagnostico-ia',
+    );
     expect(element.querySelector('input[type=file]')).toBeNull();
     expect(element.textContent).not.toContain('Configurar rango');
   });
@@ -147,6 +150,22 @@ describe('Dashboard de tres zonas', () => {
       source: 'real',
     });
   });
+  it('encabezado sin equipo seleccionado no inventa conexión', async () => {
+    const { fixture, component } = await setup(2);
+    expect(component.headerConnection()).toBeNull();
+    expect(fixture.nativeElement.querySelector('app-page-header .connection')).toBeNull();
+  });
+  it('encabezado degrada un online sin canal actualizado y no da verde sin lectura', async () => {
+    const { component, facade } = await setup();
+    facade.status.set('online');
+    facade.stream.set('error');
+    expect(component.headerConnection()?.label).toBe('Conexión o datos sin actualizar');
+    expect(component.headerConnection()?.healthy).toBe(false);
+    facade.stream.set('connected');
+    facade.readingStale.set(false);
+    expect(component.headerConnection()?.label).toBe('Sin lecturas disponibles');
+    expect(component.headerConnection()?.healthy).toBe(false);
+  });
   it.each(['alerts', 'readings', 'history'])(
     '%s usa navegación Angular y desplaza el panel sin recargar ni cerrar sesión',
     async (fragment) => {
@@ -154,7 +173,9 @@ describe('Dashboard de tres zonas', () => {
       const scroll = vi
         .spyOn(TestBed.inject(ViewportScroller), 'scrollToAnchor')
         .mockImplementation(() => undefined);
-      const link = fixture.debugElement.query(By.css(`nav a[fragment="${fragment}"]`));
+      const link = fixture.debugElement
+        .queryAll(By.directive(RouterLink))
+        .find((element) => element.injector.get(RouterLink).fragment === fragment)!;
       expect(link.injector.get(RouterLink).fragment).toBe(fragment);
       expect(link.injector.get(RouterLink).queryParamsHandling).toBe('preserve');
       const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });

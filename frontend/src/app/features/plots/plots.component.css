@@ -3,55 +3,8 @@
   grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100dvh;
 }
-aside {
-  background: var(--green-dark);
-  color: white;
-  padding: 36px 24px;
-  display: flex;
-  flex-direction: column;
-}
-.brand {
-  font-size: 25px;
-}
-aside p {
-  color: #d8e8de;
-  font-size: 14px;
-  line-height: 1.7;
-}
-nav {
-  display: grid;
-  gap: 8px;
-  margin-top: 28px;
-}
-nav a {
-  color: white;
-  text-decoration: none;
-  padding: 14px;
-  border-radius: 10px;
-}
-nav a.active {
-  background: #126a2d;
-  font-weight: 700;
-}
-.phase {
-  margin-top: auto;
-  padding-top: 40px;
-}
-header {
-  min-height: 78px;
-  padding: 18px 28px;
-  background: white;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-header span {
-  display: block;
-  color: var(--muted);
-  margin-top: 5px;
-  font-size: 13px;
+.main-area {
+  min-width: 0;
 }
 main {
   max-width: 1400px;
@@ -71,7 +24,8 @@ main {
   letter-spacing: 2px;
 }
 h1 {
-  font-size: 34px;
+  font-size: clamp(26px, 2.4vw, 32px);
+  letter-spacing: -0.7px;
   margin: 16px 0;
 }
 .intro p {
@@ -82,13 +36,33 @@ h1 {
 .panel {
   background: white;
   border: 1px solid var(--border);
-  border-radius: 18px;
-  margin-top: 20px;
-  padding: 24px;
+  border-radius: var(--radius-card);
+  margin-top: var(--panel-gap);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
 }
 h2 {
   font-size: 20px;
   margin: 0 0 18px;
+}
+#create-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#create-title app-icon {
+  color: var(--green);
+}
+.create-form {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f7faf6;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .fields {
   display: grid;
@@ -121,6 +95,10 @@ button {
   border: 1px solid var(--green);
   border-radius: 8px;
   cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 100%;
 }
 button.secondary {
   color: #165a23;
@@ -151,10 +129,53 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
+.plot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.plot-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid #a9c7ae;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  text-decoration: none;
+}
+.plot-links a.open-dashboard {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+.plot-location {
+  margin-bottom: 8px;
+}
+.plot-area {
+  padding: 10px 12px;
+  background: #f5f8f4;
+  border-radius: 8px;
+}
+.success {
+  padding: 12px 16px;
+  border: 1px solid #bfd9bd;
+  border-radius: 10px;
+  background: var(--green-soft);
+  color: #176322;
+  font-size: 13px;
+}
 article {
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  border-top: 4px solid var(--green);
   overflow-wrap: anywhere;
 }
 .tag {
@@ -215,21 +236,9 @@ article p,
 .skip-link:focus {
   top: 12px;
 }
-@media (min-width: 681px) {
-  aside {
-    position: sticky;
-    top: 0;
-    align-self: start;
-    height: 100dvh;
-    overflow-y: auto;
-  }
-}
 @media (max-width: 1050px) {
   .workspace {
     grid-template-columns: 210px minmax(0, 1fr);
-  }
-  .brand {
-    font-size: 21px;
   }
   .fields {
     grid-template-columns: 1fr;
@@ -239,25 +248,6 @@ article p,
   .workspace {
     display: block;
   }
-  aside {
-    padding: 20px;
-  }
-  aside p {
-    display: none;
-  }
-  nav {
-    display: flex;
-    flex-wrap: wrap;
-    margin-top: 12px;
-    gap: 4px;
-    font-size: 14px;
-  }
-  nav a {
-    padding: 10px;
-  }
-  header {
-    padding: 16px;
-  }
   main {
     padding: 16px;
   }
@@ -266,6 +256,12 @@ article p,
   }
   .panel {
     padding: 18px;
+  }
+  .create-form {
+    padding: 12px;
+  }
+  .plot-links a {
+    width: 100%;
   }
   .plot-grid {
     grid-template-columns: 1fr;
@@ -278,5 +274,10 @@ article p,
   .panel-heading {
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+}
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

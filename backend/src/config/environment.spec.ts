@@ -6,6 +6,13 @@ const base = {
 };
 
 describe('Configuración de entorno', () => {
+  it('clima desactivado por defecto; exige confirmación no comercial explícita al habilitar', () => {
+    expect(validateEnvironment(base).WEATHER_PROVIDER).toBe('disabled');
+    expect(() => validateEnvironment({ ...base, WEATHER_PROVIDER: 'other' })).toThrow('WEATHER_PROVIDER');
+    for (const value of [undefined, false, 'false', true])
+      expect(() => validateEnvironment({ ...base, WEATHER_PROVIDER: 'open-meteo', WEATHER_NONCOMMERCIAL_CONFIRMED: value })).toThrow('NONCOMMERCIAL');
+    expect(validateEnvironment({ ...base, WEATHER_PROVIDER: 'open-meteo', WEATHER_NONCOMMERCIAL_CONFIRMED: 'true' }).WEATHER_PROVIDER).toBe('open-meteo');
+  });
   it('aplica valores seguros para desarrollo', () => {
     expect(validateEnvironment(base)).toMatchObject({
       HOST: '127.0.0.1',
@@ -48,4 +55,23 @@ describe('Configuración de entorno', () => {
       expect(() => validateEnvironment({ ...base, JWT_SECRET })).toThrow('JWT_SECRET');
     },
   );
+  it('usa mock solo en desarrollo y deshabilita diagnóstico por defecto en producción', () => {
+    expect(validateEnvironment(base).AI_PROVIDER).toBe('mock');
+    expect(validateEnvironment({ ...base, NODE_ENV: 'production' }).AI_PROVIDER).toBe('disabled');
+    expect(() =>
+      validateEnvironment({ ...base, NODE_ENV: 'production', AI_PROVIDER: 'mock' }),
+    ).toThrow('AI_PROVIDER');
+    expect(() => validateEnvironment({ ...base, AI_PROVIDER: 'openai' })).toThrow('AI_PROVIDER');
+  });
+  it.each([
+    { AI_MAX_IMAGE_MB: 0 },
+    { AI_MAX_IMAGE_MB: 9 },
+    { AI_DAILY_LIMIT_PER_USER: -1 },
+    { AI_DAILY_LIMIT_PER_USER: 1.5 },
+    { AI_REQUEST_TIMEOUT_MS: 30001 },
+    { IMAGE_RETENTION_DAYS: 0 },
+    { IMAGE_RETENTION_DAYS: 31 },
+  ])('rechaza límites de imágenes/IA incompatibles %j', (extra) => {
+    expect(() => validateEnvironment({ ...base, ...extra })).toThrow();
+  });
 });

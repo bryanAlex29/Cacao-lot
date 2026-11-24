@@ -1,0 +1,80 @@
+<article [attr.aria-label]="label()" [attr.aria-busy]="busy()">
+  <h3>{{ label() }} · DEMO</h3>
+  @if (busy()) {
+    <p role="status">Consultando diagnóstico y fotografía privados…</p>
+  }
+  @if (error()) {
+    <p role="alert">{{ error() }}</p>
+  }
+  @if (diagnosis(); as record) {
+    <p>
+      Fecha del diagnóstico (creación):
+      <strong>{{ record.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }}</strong> · hora local del
+      navegador.
+    </p>
+    <p>
+      Estado:
+      {{
+        record.status === 'completed'
+          ? 'Completado · simulado'
+          : record.status === 'failed'
+            ? 'Fallido'
+            : 'Pendiente'
+      }}. Vence {{ record.expiresAt | date: 'dd/MM/yyyy HH:mm:ss' }}.
+    </p>
+    @if (imageUrl(); as image) {
+      <img
+        [src]="image"
+        [alt]="'Fotografía privada de comparación · ' + label()"
+        (error)="imageFailed()"
+      />
+    }
+    @if (record.notes) {
+      <h4>Notas del usuario</h4>
+      <p>{{ record.notes }}</p>
+    }
+    @if (record.status === 'completed' && record.result; as result) {
+      <h4>Resultado orientativo · DEMO</h4>
+      <p>
+        Parte de la planta:
+        {{
+          result.plantPart === 'leaf'
+            ? 'Hoja'
+            : result.plantPart === 'fruit'
+              ? 'Fruto'
+              : result.plantPart === 'stem'
+                ? 'Tallo'
+                : 'No determinada'
+        }}.
+      </p>
+      <p class="notice">{{ result.disclaimer }}</p>
+      <h4>Observaciones de demostración</h4>
+      <ul>
+        @for (symptom of result.visibleSymptoms; track $index) {
+          <li>{{ symptom }}</li>
+        }
+      </ul>
+      <h4>Posibles causas</h4>
+      <ul>
+        @for (cause of result.possibleCauses; track $index) {
+          <li>{{ cause.name }}: {{ cause.reason }}</li>
+        } @empty {
+          <li>No evaluadas por el proveedor simulado.</li>
+        }
+      </ul>
+      <p>
+        Incertidumbre: {{ result.uncertainty === 'high' ? 'Alta' : 'Media' }}. Requiere revisión
+        técnica.
+      </p>
+      <h4>Próximos pasos</h4>
+      <ul>
+        @for (action of result.recommendedActions; track $index) {
+          <li>{{ action }}</li>
+        }
+      </ul>
+    } @else {
+      <p>No hay un resultado completado para esta fotografía. No se infiere un diagnóstico.</p>
+    }
+  }
+  <button type="button" [disabled]="busy()" (click)="load()">Actualizar {{ label() }}</button>
+</article>

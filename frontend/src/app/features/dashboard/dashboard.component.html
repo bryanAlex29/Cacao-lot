@@ -1,76 +1,23 @@
 <a class="skip-link" href="#dashboard-main">Saltar al contenido</a>
 <div class="workspace">
-  <aside class="sidebar">
-    <div class="brand">
-      <span aria-hidden="true">◒</span><strong>CacaoSmart <small>IoT</small></strong>
-    </div>
-    <p class="brand-caption">Riego inteligente para<br />cultivos de cacao</p>
-    <nav aria-label="Navegación principal">
-      <a class="active" [routerLink]="['/parcelas', plot()?.id, 'dashboard']" aria-current="page"
-        ><span aria-hidden="true">⌂</span> Inicio</a
-      >
-      <a
-        [routerLink]="[]"
-        fragment="readings"
-        queryParamsHandling="preserve"
-        (click)="scrollToReadings()"
-        ><span aria-hidden="true">◴</span> Monitoreo</a
-      >
-      <a routerLink="/parcelas"><span aria-hidden="true">▦</span> Parcelas</a>
-      <span class="pending">Diagnóstico IA <small>Próximamente</small></span>
-      <a
-        [routerLink]="[]"
-        fragment="history"
-        queryParamsHandling="preserve"
-        (click)="scrollToHistory()"
-        ><span aria-hidden="true">↗</span> Historial</a
-      >
-      <a
-        [routerLink]="[]"
-        fragment="irrigation-history"
-        queryParamsHandling="preserve"
-        (click)="scrollToIrrigation()"
-        ><span aria-hidden="true">♧</span> Riego</a
-      >
-      <span class="pending">Consumo de agua <small>No disponible</small></span>
-      <a
-        [routerLink]="[]"
-        fragment="alerts"
-        queryParamsHandling="preserve"
-        (click)="scrollToAlerts()"
-        ><span aria-hidden="true">⚠</span> Alertas</a
-      >
-      <a
-        [routerLink]="[]"
-        fragment="reports"
-        queryParamsHandling="preserve"
-        (click)="scrollToReports()"
-        ><span aria-hidden="true">▤</span> Reportes</a
-      >
-      <span class="pending">Configuración <small>Mediante API</small></span>
-    </nav>
-    <div class="sidebar-footer">
-      <span aria-hidden="true">❧</span><strong>TerriTech</strong>
-      <p>Hackathon CITIC 2026<br />Chone · Manabí</p>
-      <a routerLink="/estado">Estado técnico</a>
-    </div>
-  </aside>
+  <app-sidebar
+    [plotId]="plot()?.id ?? null"
+    active="dashboard"
+    (sectionSelected)="navigateSection($event)"
+  />
   <div class="main-area">
-    <header class="topbar">
-      <div>
-        <span class="eyebrow">TU CULTIVO, CONECTADO</span>
-        <h1>{{ plot()?.name ?? 'Panel de monitoreo' }}</h1>
-        <p>{{ plot()?.locationLabel ?? 'Cargando parcela…' }}</p>
-      </div>
-      <div class="account">
-        <span
-          >{{ auth.user()?.name
-          }}<small>{{
-            auth.user()?.role === 'ADMIN' ? 'Administrador' : 'Agricultor'
-          }}</small></span
-        ><button type="button" class="secondary" (click)="logout()">Salir</button>
-      </div>
-    </header>
+    <app-page-header
+      [title]="plot()?.name ?? 'Panel de monitoreo'"
+      [subtitle]="
+        plot()?.locationLabel ?? (loading() ? 'Cargando parcela…' : 'Parcela no disponible')
+      "
+      section="MONITOREO DEL CULTIVO"
+      [primaryHeading]="true"
+      [user]="auth.user()"
+      [canChangePlot]="!!plot()"
+      [connection]="headerConnection()"
+      (signOut)="logout()"
+    />
     <main id="dashboard-main" tabindex="-1">
       @if (error()) {
         <div class="notice error" role="alert">
@@ -86,21 +33,11 @@
           <h2>Conoce tu cultivo.<br />Cuida cada gota.</h2>
           <p>Monitoreo de tres zonas y trazabilidad del riego local.</p>
         </div>
-        <svg viewBox="0 0 300 190" aria-hidden="true">
-          <path d="M20 175Q170 160 245 12" fill="none" stroke="#7baa59" stroke-width="4" />
-          <g fill="#397640">
-            <ellipse cx="97" cy="127" rx="47" ry="17" transform="rotate(28 97 127)" />
-            <ellipse cx="221" cy="108" rx="53" ry="20" transform="rotate(-30 221 108)" />
-            <ellipse cx="179" cy="37" rx="48" ry="17" transform="rotate(30 179 37)" />
-          </g>
-          <g transform="rotate(24 166 108)">
-            <ellipse cx="166" cy="108" rx="35" ry="62" fill="#dc9b3c" />
-            <ellipse cx="166" cy="108" rx="22" ry="60" fill="#bd7427" />
-            <ellipse cx="166" cy="108" rx="9" ry="60" fill="#e6ad51" />
-          </g>
-        </svg>
         <div class="hero-note">
-          Observa · Comprende · Conserva<span>Información, no órdenes remotas</span>
+          <p><app-icon name="water" /> Cuida cada gota</p>
+          <p><app-icon name="leaf" /> Observa tu cultivo</p>
+          <p><app-icon name="check" /> Producción sostenible</p>
+          <span>Información, no órdenes remotas</span>
         </div>
       </section>
       <section class="controls panel" aria-label="Selección de telemetría">
@@ -250,7 +187,7 @@
           <h2>Condiciones ambientales</h2>
           <div class="environment-grid">
             <div>
-              <span class="metric-icon" aria-hidden="true">♨</span>
+              <span class="metric-icon"><app-icon name="temperature" /></span>
               <h3>Temperatura</h3>
               <strong
                 >{{
@@ -267,7 +204,7 @@
               />
             </div>
             <div>
-              <span class="metric-icon" aria-hidden="true">♧</span>
+              <span class="metric-icon"><app-icon name="water" /></span>
               <h3>Humedad ambiental</h3>
               <strong
                 >{{
@@ -290,7 +227,7 @@
         </section>
         <section class="panel rain">
           <h2>Lluvia</h2>
-          <span class="rain-icon" aria-hidden="true">☂</span
+          <span class="rain-icon"><app-icon name="rain" /></span
           ><strong>{{
             reading()?.rainDetected === null || !reading()
               ? 'Sin datos'
@@ -308,7 +245,7 @@
             <h2>Sistema de riego</h2>
           </div>
           <div class="irrigation-body">
-            <span aria-hidden="true">♧</span>
+            <app-icon name="tap" />
             <div>
               <strong>{{
                 reading()?.valve?.relayCommandedOpen === null || !reading()
@@ -334,7 +271,7 @@
             <div>Agua aplicada<strong>No disponible</strong></div>
           </div>
         </section>
-        <app-diagnosis-preview />
+        <app-diagnosis-preview [plotId]="plot()?.id ?? null" />
       </div>
       <div class="bottom-grid">
         <section id="history" tabindex="-1" class="panel history">

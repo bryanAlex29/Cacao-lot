@@ -12,14 +12,20 @@ import type { SensorRangeState } from '../../core/sensor-thresholds/sensor-thres
         Mín. {{ range.minValue | number: '1.0-2' }} {{ unit() }} · Máx.
         {{ range.maxValue | number: '1.0-2' }} {{ unit() }}
       </p>
-      <p>Rango configurado · solo monitoreo</p>
-      <p>
-        Vigente desde {{ range.effectiveAt | date: 'dd/MM/yyyy HH:mm:ss' }} · v{{ range.version }}
-      </p>
+      <details>
+        <summary>Detalles del rango</summary>
+        <p>Rango configurado · solo monitoreo</p>
+        <p>
+          Vigente desde {{ range.effectiveAt | date: 'dd/MM/yyyy HH:mm:ss' }} · v{{ range.version }}
+        </p>
+        @if (state().checkedAt) {
+          <p>Consultado {{ state().checkedAt | date: 'HH:mm:ss' }} · hora local</p>
+        }
+      </details>
     } @else {
       <p>{{ labels[state().status] }}</p>
     }
-    @if (state().checkedAt) {
+    @if (state().checkedAt && state().status !== 'configured') {
       <p>Consultado {{ state().checkedAt | date: 'HH:mm:ss' }} · hora local</p>
     }
     @if (canEdit() && (state().status === 'configured' || state().status === 'unconfigured')) {
@@ -47,6 +53,16 @@ import type { SensorRangeState } from '../../core/sensor-thresholds/sensor-thres
       }
       .limits {
         font-weight: 700;
+      }
+      summary {
+        cursor: pointer;
+        font-size: 11px;
+        padding: 8px 0;
+        line-height: 1.5;
+      }
+      summary:focus-visible {
+        outline: 3px solid #1263bd;
+        outline-offset: 2px;
       }
       button {
         margin-top: 8px;

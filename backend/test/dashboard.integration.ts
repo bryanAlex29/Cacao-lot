@@ -5,7 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page } from 'playwright-core';
 import { spawn, ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, writeFile, access, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, access, readFile, rm } from 'node:fs/promises';
+import sharp from 'sharp';
+import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppModule } from '../src/app.module';
@@ -17,6 +19,7 @@ import { ThresholdService } from '../src/sensor-thresholds/threshold.service';
 import { getOptionsToken } from '@nestjs/throttler';
 import { OfflineAlertRepository } from '../src/alerts/offline-alert.repository';
 import { SourcePolicy } from '../src/integrations/source-policy.service';
+import { PrivateImageStore } from '../src/ai-diagnostics/private-image.store';
 import { MoistureRepository } from '../src/alerts/moisture/moisture.repository';
 import type { SensorStatusEvent } from '@cacaosmart/contracts';
 
@@ -82,6 +85,15 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       });
     });
     frontendUrl = `http://127.0.0.1:${port}`;
+    directory = await mkdtemp(
+      join(
+        process.env['LOCALAPPDATA']
+          ? join(process.env['LOCALAPPDATA'], 'Temp', 'opencode')
+          : (process.env['TEMP'] ?? '.'),
+        'cacaosmart-browser-',
+      ),
+    );
+    process.env['IMAGE_STORAGE_PATH'] = join(directory, 'private-ai-images');
     const module = await Test.createTestingModule({ imports: [AppModule] })
       // Only this isolated browser matrix needs a larger budget. The APP_GUARD useClass binding
       // is not replaced by overrideGuard(ThrottlerGuard); override its options provider instead.
@@ -163,14 +175,6 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     adminSoilId = adminDevice.sensors.find((sensor) => sensor.code === 'soil_1')!.id;
     adminDeviceId = adminDevice.id;
     adminDeviceKey = adminDevice.deviceKey;
-    directory = await mkdtemp(
-      join(
-        process.env['LOCALAPPDATA']
-          ? join(process.env['LOCALAPPDATA'], 'Temp', 'opencode')
-          : (process.env['TEMP'] ?? '.'),
-        'cacaosmart-browser-',
-      ),
-    );
     const proxy = join(directory, 'proxy.json');
     await writeFile(
       proxy,
@@ -213,7 +217,8 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     }
     if (!ready) throw new Error('Angular de prueba no inició en 80 segundos');
     browser = await chromium.launch({ executablePath, headless: true });
-    page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
+    const mainContext = await browser.newContext({ viewport: { width: 1440, height: 1050 } });
+    page = await mainContext.newPage();
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('response', (response) => {
       if (response.status() === 429) unexpectedRateLimits.push(new URL(response.url()).pathname);
@@ -223,6 +228,8 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     if (browser) await browser.close();
     if (angular && angular.exitCode === null) angular.kill();
     if (app) await app.close();
+    if (directory) await rm(join(directory, 'private-ai-images'), { recursive: true, force: true });
+    delete process.env['IMAGE_STORAGE_PATH'];
   });
 
   it('login, DEMO explícita y tres tarjetas actualizadas por el simulador', async () => {
@@ -258,6 +265,8 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await text('app-soil-sensor-card:nth-child(2)', '45');
     await text('app-soil-sensor-card:nth-child(3)', '65');
     expect(await page.locator('app-soil-history-chart path').count()).toBe(3);
+    await page.locator('app-page-header .connection-badge.healthy').waitFor();
+    expect(await page.locator('app-page-header .connection-badge').textContent()).toContain('DEMO');
     expect(
       await app.get(PrismaService).reading.count({ where: { deviceId, eventId: 'sim:browser:0' } }),
     ).toBe(1);
@@ -558,8 +567,20 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
+    const menu = page.getByRole('button', { name: 'Menú', exact: true });
+    expect(await menu.getAttribute('aria-expanded')).toBe('false');
+    await menu.click();
+    await page.locator('.menu-toggle[aria-expanded="true"]').waitFor();
+    expect(await menu.getAttribute('aria-expanded')).toBe('true');
     expect(await page.getByRole('navigation', { name: 'Navegación principal' }).isVisible()).toBe(
       true,
+    );
+    await menu.click();
+    await page
+      .getByRole('navigation', { name: 'Navegación principal' })
+      .waitFor({ state: 'hidden' });
+    expect(await page.getByRole('navigation', { name: 'Navegación principal' }).isVisible()).toBe(
+      false,
     );
     expect(await page.locator('app-soil-sensor-card').count()).toBe(3);
     await page.screenshot({ path: join(directory, 'dashboard-mobile.png'), fullPage: true });
@@ -1028,6 +1049,16 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await panel.getByRole('button', { name: 'Actualizar alertas', exact: true }).click();
     const episode = panel.locator(`[data-alert-id="${active.id}"]`);
     await episode.getByText('Desconexión detectada · condición activa', { exact: false }).waitFor();
+    const evidence = episode.locator('.alert-evidence');
+    expect(await evidence.getAttribute('open')).toBeNull();
+    const evidenceToggle = evidence.locator('summary');
+    await evidenceToggle.focus();
+    await evidenceToggle.press('Enter');
+    await evidence.getByText('Último contacto de ese episodio:', { exact: false }).waitFor();
+    await evidenceToggle.press('Enter');
+    await evidence
+      .getByText('Último contacto de ese episodio:', { exact: false })
+      .waitFor({ state: 'hidden' });
     expect(await panel.textContent()).toContain('DEMO · Alertas de demostración');
     const before = await db.offlineAlert.count({ where: { deviceId } });
     await episode.getByRole('button', { name: 'Reconocer alerta', exact: true }).click();
@@ -1102,7 +1133,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     adminPage.setDefaultTimeout(7000);
     const db = app.get(PrismaService);
     const panel = adminPage.locator('app-moisture-alerts-panel');
-    await panel.locator('summary').click();
+    await panel.getByText('Configuración de alertas A/B/C', { exact: true }).click();
     const policy = panel.locator('app-moisture-policy').first();
     await policy.getByRole('button', { name: 'Consultar política', exact: true }).click();
     await policy.getByText('Inhabilitada: falta configurar el margen.', { exact: true }).waitFor();
@@ -1150,6 +1181,13 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await panel.getByRole('button', { name: 'Actualizar alertas de humedad', exact: true }).click();
     const episode = panel.locator(`[data-moisture-alert-id="${alert.id}"]`);
     await episode.getByText('Baja humedad · condición activa', { exact: false }).waitFor();
+    const evidence = episode.locator('.alert-evidence');
+    expect(await evidence.getAttribute('open')).toBeNull();
+    await evidence.locator('summary').focus();
+    await evidence.locator('summary').press('Enter');
+    await evidence.getByText('Tercera lectura:', { exact: false }).waitFor();
+    await evidence.locator('summary').press('Enter');
+    await evidence.getByText('Tercera lectura:', { exact: false }).waitFor({ state: 'hidden' });
     await episode.getByRole('button', { name: 'Reconocer alerta de humedad', exact: true }).click();
     await episode.getByText('Reconocida', { exact: false }).waitFor();
     expect(
@@ -1601,7 +1639,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
         const panel = card.locator('app-device-inventory');
         await panel.getByRole('heading', { name: account.serial, exact: true }).waitFor();
         await panel.getByText('DEMO · Equipo de demostración', { exact: true }).waitFor();
-        await panel.locator('summary').click();
+        await panel.locator('.device .sensors summary').click();
         expect(await panel.locator('.sensor').count()).toBe(6);
         for (const label of [
           'Sensor 1',
@@ -1613,7 +1651,9 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
         ]) {
           expect(await panel.textContent()).toContain(label);
         }
-        expect(await panel.locator('form').count()).toBe(0);
+        expect(await panel.locator('form').count()).toBe(
+          account.email === 'browser@example.test' ? 0 : 1,
+        );
         const fail = '**/api/v1/plots/*/devices?*';
         await inventoryPage.route(fail, (route) =>
           route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
@@ -1650,7 +1690,701 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     },
   );
 
+  it('ADMIN gestiona equipo con clave única, habilitación y edición/archivo sin borrar historial', async () => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      storageState: await adminPage.context().storageState(),
+    });
+    const managementPage = await context.newPage();
+    try {
+      await managementPage.goto(`${frontendUrl}/parcelas`);
+      await managementPage.getByRole('heading', { name: 'Mis parcelas', exact: true }).waitFor();
+      await managementPage.getByLabel('Nombre', { exact: true }).fill('Gestión · Aislada');
+      await managementPage.getByLabel('Ubicación', { exact: true }).fill('Chone');
+      const creating = managementPage.waitForResponse(
+        (r) => r.url().endsWith('/api/v1/plots') && r.request().method() === 'POST',
+      );
+      await managementPage.getByRole('button', { name: 'Crear parcela', exact: true }).click();
+      const createdPlot = (await (await creating).json()) as { id: string };
+      let card = managementPage.locator('article').filter({
+        has: managementPage.getByRole('heading', { name: 'Gestión · Aislada', exact: true }),
+      });
+      await card.getByRole('button', { name: 'Ver dispositivos y sensores', exact: true }).click();
+      const manager = card.locator('app-device-management');
+      const registration = manager.locator('.registration');
+      expect(await registration.getAttribute('open')).toBeNull();
+      await registration.locator('summary').focus();
+      await registration.locator('summary').press('Enter');
+      await manager.getByLabel('Serie del equipo', { exact: true }).fill('browser-management');
+      await manager.getByLabel('Origen del equipo', { exact: true }).selectOption('demo');
+      await manager.getByLabel('Intervalo esperado en segundos', { exact: true }).fill('15');
+      await manager.getByRole('checkbox').check();
+      const failedCreate = `**/api/v1/plots/${createdPlot.id}/devices`;
+      let attempts = 0;
+      await managementPage.route(failedCreate, (route) => {
+        attempts++;
+        return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+      });
+      await manager.getByRole('button', { name: 'Registrar dispositivo', exact: true }).click();
+      await manager.getByText('No se confirmó el alta.', { exact: false }).waitFor();
+      expect(
+        await manager
+          .getByRole('button', { name: 'Registrar dispositivo', exact: true })
+          .isDisabled(),
+      ).toBe(true);
+      expect(attempts).toBe(1);
+      await managementPage.unroute(failedCreate);
+      await card.getByRole('button', { name: 'Actualizar dispositivos', exact: true }).click();
+      await manager
+        .getByRole('button', { name: 'Revisé el inventario · Desbloquear formulario', exact: true })
+        .click();
+      const registering = managementPage.waitForResponse(
+        (r) =>
+          r.url().endsWith(`/plots/${createdPlot.id}/devices`) && r.request().method() === 'POST',
+      );
+      await manager.getByRole('button', { name: 'Registrar dispositivo', exact: true }).click();
+      const registered = (await (await registering).json()) as {
+        id: string;
+        deviceKey: string;
+        sensors: unknown[];
+      };
+      expect(registered.sensors.length).toBe(6);
+      await manager.getByLabel('Clave privada del dispositivo', { exact: true }).waitFor();
+      expect(
+        await manager.getByLabel('Clave privada del dispositivo', { exact: true }).inputValue(),
+      ).toBe(registered.deviceKey);
+      expect(
+        await managementPage.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage })),
+      ).not.toContain(registered.deviceKey);
+      // Refresh inventory does not destroy the one-time credential panel.
+      await card.getByRole('button', { name: 'Actualizar dispositivos', exact: true }).click();
+      await card
+        .locator('.device')
+        .getByRole('heading', { name: 'browser-management', exact: true })
+        .waitFor();
+      expect(
+        await manager.getByLabel('Clave privada del dispositivo', { exact: true }).inputValue(),
+      ).toBe(registered.deviceKey);
+      await manager
+        .getByRole('button', { name: 'Ya guardé la clave · Ocultar', exact: true })
+        .click();
+      await manager.locator('textarea').waitFor({ state: 'detached' });
+      await manager.locator('.registration summary').waitFor({ state: 'visible' });
+      await managementPage.waitForFunction(() =>
+        document.activeElement?.matches('app-device-management .registration summary'),
+      );
+      // The returned focus is visible and safe to capture: no credential remains.
+      await manager.screenshot({ path: join(directory, 'device-management-collapsed-mobile.png') });
+      await manager
+        .getByRole('button', { name: 'Deshabilitar browser-management', exact: true })
+        .click();
+      const cancelChange = manager.getByRole('button', { name: 'Cancelar cambio', exact: true });
+      await cancelChange.waitFor();
+      await managementPage.waitForFunction(
+        () => document.activeElement?.textContent?.trim() === 'Cancelar cambio',
+      );
+      await cancelChange.press('Escape');
+      await manager
+        .getByRole('group', { name: 'Confirmar habilitación', exact: true })
+        .waitFor({ state: 'detached' });
+      await managementPage.waitForFunction(
+        () => document.activeElement?.textContent?.trim() === 'Deshabilitar browser-management',
+      );
+      const db = app.get(PrismaService);
+      expect((await db.device.findUniqueOrThrow({ where: { id: registered.id } })).isActive).toBe(
+        true,
+      );
+      await manager
+        .getByRole('button', { name: 'Deshabilitar browser-management', exact: true })
+        .click();
+      const disabling = managementPage.waitForResponse(
+        (r) => r.url().endsWith(`/devices/${registered.id}`) && r.request().method() === 'PATCH',
+      );
+      await manager
+        .getByRole('button', { name: 'Confirmar cambio de habilitación', exact: true })
+        .click();
+      expect((await disabling).status()).toBe(200);
+      await manager
+        .getByRole('button', { name: 'Habilitar browser-management', exact: true })
+        .waitFor();
+      expect((await db.device.findUniqueOrThrow({ where: { id: registered.id } })).isActive).toBe(
+        false,
+      );
+      await manager
+        .getByRole('button', { name: 'Habilitar browser-management', exact: true })
+        .click();
+      const enabling = managementPage.waitForResponse(
+        (r) => r.url().endsWith(`/devices/${registered.id}`) && r.request().method() === 'PATCH',
+      );
+      await manager
+        .getByRole('button', { name: 'Confirmar cambio de habilitación', exact: true })
+        .click();
+      await enabling;
+      await manager
+        .getByRole('button', { name: 'Deshabilitar browser-management', exact: true })
+        .waitFor();
+      const observed = await fetch(`${apiUrl}/api/v1/iot/telemetry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-Id': registered.id,
+          'X-Device-Key': registered.deviceKey,
+        },
+        body: JSON.stringify({
+          schemaVersion: '1.2',
+          deviceId: registered.id,
+          eventId: 'management-observation',
+          recordedAt: null,
+          soilMoisture: { soil_1: 20, soil_2: 40, soil_3: 60 },
+          temperatureC: 26,
+          airHumidityPct: 70,
+          rainDetected: false,
+          valve: { relayCommandedOpen: false, feedbackOpen: null },
+        }),
+      });
+      expect(observed.status).toBe(201);
+      await card.getByRole('button', { name: 'Editar parcela', exact: true }).click();
+      await managementPage.waitForFunction(
+        () => document.activeElement?.getAttribute('formControlName') === 'name',
+      );
+      await card.getByLabel('Nombre de la parcela', { exact: true }).press('Escape');
+      await managementPage.waitForFunction(
+        () => document.activeElement?.textContent?.trim() === 'Editar parcela',
+      );
+      await card.getByRole('button', { name: 'Editar parcela', exact: true }).click();
+      await card.getByLabel('Nombre de la parcela', { exact: true }).fill('Gestión · Editada');
+      await card
+        .getByLabel('Superficie de la parcela en m² (opcional)', { exact: true })
+        .fill('500');
+      const updating = managementPage.waitForResponse(
+        (r) => r.url().endsWith(`/plots/${createdPlot.id}`) && r.request().method() === 'PATCH',
+      );
+      await card.getByRole('button', { name: 'Guardar parcela', exact: true }).click();
+      expect((await updating).status()).toBe(200);
+      card = managementPage.locator('article').filter({
+        has: managementPage.getByRole('heading', { name: 'Gestión · Editada', exact: true }),
+      });
+      await card.waitFor();
+      expect((await db.plot.findUniqueOrThrow({ where: { id: createdPlot.id } })).areaM2).toBe(500);
+      expect(
+        await managementPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      ).toBe(true);
+      await managementPage.screenshot({
+        path: join(directory, 'device-management-mobile.png'),
+        fullPage: true,
+      });
+      await card.getByRole('button', { name: 'Archivar parcela', exact: true }).click();
+      await managementPage.waitForFunction(
+        () =>
+          document.activeElement?.getAttribute('autocomplete') === 'off' &&
+          document.activeElement?.closest('app-plot-management') !== null,
+      );
+      await card
+        .getByRole('group', { name: 'Confirmar archivo de Gestión · Editada', exact: true })
+        .screenshot({ path: join(directory, 'plot-archive-mobile.png') });
+      expect(
+        await card
+          .getByRole('button', { name: 'Confirmar archivo de parcela', exact: true })
+          .isDisabled(),
+      ).toBe(true);
+      await card
+        .getByLabel('Escribe el nombre de la parcela para confirmar', { exact: true })
+        .fill('Gestión · Editada');
+      const archiving = managementPage.waitForResponse(
+        (r) => r.url().endsWith(`/plots/${createdPlot.id}`) && r.request().method() === 'DELETE',
+      );
+      await card.getByRole('button', { name: 'Confirmar archivo de parcela', exact: true }).click();
+      expect((await archiving).status()).toBe(204);
+      await card.waitFor({ state: 'detached' });
+      expect(
+        (await db.plot.findUniqueOrThrow({ where: { id: createdPlot.id } })).archivedAt,
+      ).not.toBeNull();
+      expect(await db.device.count({ where: { id: registered.id } })).toBe(1);
+      expect(await db.sensor.count({ where: { deviceId: registered.id } })).toBe(6);
+      expect(await db.reading.count({ where: { deviceId: registered.id } })).toBe(1);
+    } finally {
+      await context.close();
+    }
+  }, 45000);
+
+  it('login y registro adaptables conservan etiquetas, privacidad y enlaces sin enviar credenciales', async () => {
+    const context = await browser.newContext();
+    const accessPage = await context.newPage();
+    const mutations: string[] = [];
+    try {
+      await accessPage.goto(`${frontendUrl}/login`);
+      await accessPage.getByRole('heading', { name: 'Bienvenido de nuevo', exact: true }).waitFor();
+      // Ignore the initial session recovery; interactions below must not submit credentials.
+      accessPage.on('request', (request) => {
+        if (/\/auth\/(login|register)$/.test(request.url()) && request.method() === 'POST')
+          mutations.push(request.url());
+      });
+      expect(await accessPage.locator('.privacy').textContent()).toContain('hasta 8 horas');
+      for (const route of ['login', 'registro']) {
+        if (route === 'registro') {
+          await accessPage
+            .getByRole('link', { name: 'Crear cuenta de agricultor', exact: true })
+            .click();
+          await accessPage.getByRole('heading', { name: 'Crea tu cuenta', exact: true }).waitFor();
+        }
+        for (const width of [320, 390, 768, 1440]) {
+          await accessPage.setViewportSize({ width, height: 900 });
+          expect(
+            await accessPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          ).toBe(true);
+          expect(
+            await accessPage.getByLabel('Correo electrónico', { exact: true }).isVisible(),
+          ).toBe(true);
+          if (width === 390 || width === 1440)
+            await accessPage.screenshot({
+              path: join(directory, `auth-${route}-${width}.png`),
+              fullPage: true,
+            });
+        }
+      }
+      await accessPage.getByRole('link', { name: 'Iniciar sesión', exact: true }).click();
+      await accessPage.getByRole('heading', { name: 'Bienvenido de nuevo', exact: true }).waitFor();
+      await accessPage.locator('.setup summary').focus();
+      await accessPage.locator('.setup summary').press('Enter');
+      expect(await accessPage.locator('.setup').getAttribute('open')).not.toBeNull();
+      expect(mutations).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('FARMER sube foto con consentimiento, consulta DEMO privada y reintenta respuesta perdida sin duplicar', async () => {
+    // Share the live cookie jar; copying a rotating refresh cookie makes later pages stale.
+    const diagnosisPage = await page.context().newPage();
+    await diagnosisPage.setViewportSize({ width: 390, height: 844 });
+    try {
+      await diagnosisPage.goto(`${frontendUrl}/parcelas`);
+      const card = diagnosisPage.locator('article').filter({
+        has: diagnosisPage.getByRole('heading', { name: 'Cacao · Prueba aislada', exact: true }),
+      });
+      await card.getByRole('link', { name: 'Diagnóstico IA · DEMO →', exact: true }).click();
+      await diagnosisPage
+        .getByRole('heading', { name: 'Fotografía de la planta', exact: true })
+        .waitFor();
+      const input = diagnosisPage.getByLabel('Subir imagen de la planta', { exact: true });
+      const photo = await sharp({
+        create: { width: 60, height: 40, channels: 3, background: '#387e3e' },
+      })
+        .png()
+        .toBuffer();
+      let posts = 0;
+      diagnosisPage.on('request', (req) => {
+        if (req.method() === 'POST' && req.url().endsWith('/ai-diagnostics')) posts++;
+      });
+      await input.setInputFiles({ name: 'cacao-demo.png', mimeType: 'image/png', buffer: photo });
+      await diagnosisPage
+        .getByAltText('Vista previa de la foto elegida, aún no enviada', { exact: true })
+        .waitFor();
+      expect(posts).toBe(0);
+      const confirm = diagnosisPage.getByRole('button', {
+        name: 'Confirmar análisis simulado',
+        exact: true,
+      });
+      expect(await confirm.isDisabled()).toBe(true);
+      for (const width of [320, 768, 1440]) {
+        await diagnosisPage.setViewportSize({ width, height: 900 });
+        expect(
+          await diagnosisPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+      }
+      await diagnosisPage
+        .locator('.capture-panel')
+        .screenshot({ path: join(directory, 'ai-capture-desktop.png') });
+      await diagnosisPage.setViewportSize({ width: 390, height: 844 });
+      await diagnosisPage
+        .locator('.capture-panel')
+        .screenshot({ path: join(directory, 'ai-capture-mobile.png') });
+      await diagnosisPage.getByRole('checkbox').check();
+      const creating = diagnosisPage.waitForResponse(
+        (r) => r.url().endsWith('/ai-diagnostics') && r.request().method() === 'POST',
+      );
+      await confirm.click();
+      const created = (await (await creating).json()) as {
+        id: string;
+        source: string;
+        status: string;
+      };
+      expect(created.source).toBe('demo');
+      expect(created.status).toBe('completed');
+      await diagnosisPage.getByRole('heading', { name: 'Resultado · DEMO', exact: true }).waitFor();
+      await diagnosisPage
+        .getByAltText('Fotografía privada del análisis seleccionado', { exact: true })
+        .waitFor();
+      expect(await diagnosisPage.locator('main').textContent()).toContain('no concluyente');
+      expect(await diagnosisPage.locator('main').textContent()).toContain(
+        'No evaluadas por el proveedor simulado',
+      );
+      await diagnosisPage
+        .locator('.result-panel')
+        .screenshot({ path: join(directory, 'ai-result-mobile.png') });
+      expect(
+        await diagnosisPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      ).toBe(true);
+      await diagnosisPage.screenshot({
+        path: join(directory, 'ai-diagnosis-demo-mobile.png'),
+        fullPage: true,
+      });
+      // The backend persists the second upload, but the browser loses its response.
+      await input.setInputFiles({ name: 'cacao-demo.png', mimeType: 'image/png', buffer: photo });
+      await diagnosisPage.getByRole('checkbox').check();
+      const pattern = '**/api/v1/ai-diagnostics';
+      let lostId = '';
+      await diagnosisPage.route(pattern, async (route) => {
+        if (route.request().method() !== 'POST') return route.continue();
+        const response = await route.fetch();
+        lostId = ((await response.json()) as { id: string }).id;
+        await route.abort('failed');
+      });
+      await diagnosisPage
+        .getByRole('button', { name: 'Confirmar análisis simulado', exact: true })
+        .click();
+      await diagnosisPage
+        .getByRole('button', { name: 'Reintentar misma solicitud', exact: true })
+        .waitFor();
+      await diagnosisPage.unroute(pattern);
+      const retrying = diagnosisPage.waitForResponse(
+        (r) => r.url().endsWith('/ai-diagnostics') && r.request().method() === 'POST',
+      );
+      await diagnosisPage
+        .getByRole('button', { name: 'Reintentar misma solicitud', exact: true })
+        .click();
+      expect(((await (await retrying).json()) as { id: string }).id).toBe(lostId);
+      await diagnosisPage
+        .getByRole('button', { name: 'Quitar foto', exact: true })
+        .waitFor({ state: 'detached' });
+      const db = app.get(PrismaService);
+      expect(await db.aiDiagnosis.count({ where: { plotId } })).toBe(2);
+      await diagnosisPage.reload();
+      await diagnosisPage
+        .getByRole('button', { name: 'Ver análisis', exact: true })
+        .first()
+        .waitFor();
+      expect(
+        await diagnosisPage.getByRole('button', { name: 'Ver análisis', exact: true }).count(),
+      ).toBe(2);
+      await diagnosisPage
+        .getByRole('button', { name: 'Eliminar análisis', exact: true })
+        .first()
+        .click();
+      await diagnosisPage
+        .getByRole('button', { name: 'Cancelar eliminación', exact: true })
+        .click();
+      expect(await db.aiDiagnosis.count({ where: { plotId, deletedAt: null } })).toBe(2);
+      await diagnosisPage
+        .getByRole('button', { name: 'Eliminar análisis', exact: true })
+        .first()
+        .click();
+      const deleting = diagnosisPage.waitForResponse(
+        (r) => r.request().method() === 'DELETE' && r.url().includes('/ai-diagnostics/'),
+      );
+      await diagnosisPage
+        .getByRole('button', { name: 'Confirmar eliminación', exact: true })
+        .click();
+      expect((await deleting).status()).toBe(204);
+      expect(await db.aiDiagnosis.count({ where: { plotId, deletedAt: null } })).toBe(1);
+      const noSession = await fetch(`${apiUrl}/api/v1/ai-diagnostics/${created.id}/image`);
+      expect(noSession.status).toBe(401);
+    } finally {
+      await diagnosisPage.close();
+    }
+  }, 45000);
+
+  it('historial IA filtra fechas/estado, conserva UTC al paginar y recupera error sin subir fotos', async () => {
+    const db = app.get(PrismaService);
+    const owner = await db.plot.findUniqueOrThrow({ where: { id: plotId } });
+    const filterPlot = await db.plot.create({
+      data: { name: 'Filtros IA · Prueba aislada', locationLabel: 'Chone', ownerId: owner.ownerId },
+    });
+    const now = Math.floor(Date.now() / 1000) * 1000;
+    const from = new Date(now - 120000),
+      to = new Date(now - 60000);
+    const result = {
+      plantPart: 'unknown',
+      visibleSymptoms: ['Fixture DEMO, sin evaluación real'],
+      possibleCauses: [],
+      uncertainty: 'high',
+      recommendedActions: ['Consultar técnico'],
+      requiresExpertReview: true,
+      disclaimer: 'Resultado simulado de prueba',
+    };
+    const row = (status: string, createdAt: Date) => ({
+      id: randomUUID(),
+      userId: owner.ownerId,
+      plotId: filterPlot.id,
+      requestId: randomUUID(),
+      payloadHash: 'a'.repeat(64),
+      status,
+      consentVersion: 'demo-v1',
+      consentAt: createdAt,
+      createdAt,
+      expiresAt: new Date(now + 86400000),
+      ...(status === 'completed' ? { result } : {}),
+    });
+    await db.aiDiagnosis.createMany({
+      data: [
+        ...Array.from({ length: 12 }, () => row('completed', from)),
+        row('failed', to),
+        row('pending', from),
+        row('completed', new Date(from.getTime() - 1000)),
+      ],
+    });
+    const filterPage = await page.context().newPage();
+    await filterPage.setViewportSize({ width: 390, height: 844 });
+    const mutations: string[] = [];
+    filterPage.on('request', (req) => {
+      if (req.url().includes('/api/v1/ai-diagnostics') && req.method() !== 'GET')
+        mutations.push(req.method());
+    });
+    try {
+      await filterPage.goto(`${frontendUrl}/diagnostico-ia?plotId=${filterPlot.id}`);
+      const history = filterPage.locator('section[aria-labelledby="history-title"]');
+      await history.getByRole('button', { name: 'Ver análisis', exact: true }).first().waitFor();
+      const local = async (date: Date) =>
+        filterPage.evaluate((value) => {
+          const d = new Date(value);
+          return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
+        }, date.toISOString());
+      const fromInput = history.getByLabel('Desde del diagnóstico (hora local)', { exact: true });
+      const toInput = history.getByLabel('Hasta del diagnóstico (hora local)', { exact: true });
+      const state = history.getByLabel('Estado del diagnóstico', { exact: true });
+      const nextResponse = () =>
+        filterPage.waitForResponse(
+          (r) =>
+            new URL(r.url()).pathname.endsWith('/ai-diagnostics') && r.request().method() === 'GET',
+        );
+      await fromInput.fill(await local(from));
+      await toInput.fill(await local(to));
+      await state.selectOption('completed');
+      let response = nextResponse();
+      await history
+        .getByRole('button', { name: 'Aplicar filtros de diagnósticos', exact: true })
+        .click();
+      const first = await response,
+        query = new URL(first.url()).searchParams;
+      expect(query.get('from')).toBe(from.toISOString());
+      expect(query.get('to')).toBe(to.toISOString());
+      expect(query.get('status')).toBe('completed');
+      expect((await first.json()).total).toBe(12);
+      response = nextResponse();
+      await history.getByRole('button', { name: 'Diagnósticos siguientes', exact: true }).click();
+      const second = await response;
+      expect(new URL(second.url()).searchParams.get('offset')).toBe('10');
+      expect((await second.json()).items).toHaveLength(2);
+      await history.getByText('Página 2 · 12 registros', { exact: true }).waitFor();
+      await state.selectOption('failed');
+      response = nextResponse();
+      await history.getByRole('button', { name: 'Actualizar diagnósticos', exact: true }).click();
+      const refreshed = new URL((await response).url()).searchParams;
+      expect(refreshed.get('status')).toBe('completed');
+      expect(refreshed.get('from')).toBe(query.get('from'));
+      expect(refreshed.get('offset')).toBe('10');
+      await fromInput.fill(await local(new Date(to.getTime() + 60000)));
+      await history
+        .getByRole('button', { name: 'Aplicar filtros de diagnósticos', exact: true })
+        .click();
+      await history.getByRole('alert').waitFor();
+      expect(await history.locator('[data-history-filters]').textContent()).toContain('Completado');
+      expect(await history.getByRole('button', { name: 'Ver análisis', exact: true }).count()).toBe(
+        2,
+      );
+      await fromInput.fill(await local(from));
+      response = nextResponse();
+      await history
+        .getByRole('button', { name: 'Aplicar filtros de diagnósticos', exact: true })
+        .click();
+      expect((await (await response).json()).total).toBe(1);
+      await history.getByText('Página 1 · 1 registros', { exact: true }).waitFor();
+      expect(await history.locator('article').textContent()).toContain('Fallido');
+      response = nextResponse();
+      await history
+        .getByRole('button', { name: 'Limpiar filtros de diagnósticos', exact: true })
+        .click();
+      const cleared = await response;
+      expect(new URL(cleared.url()).searchParams.has('from')).toBe(false);
+      expect(new URL(cleared.url()).searchParams.has('status')).toBe(false);
+      expect((await cleared.json()).total).toBe(15);
+      await filterPage.route('**/api/v1/ai-diagnostics?*', (route) =>
+        route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+      );
+      await state.selectOption('pending');
+      await history
+        .getByRole('button', { name: 'Aplicar filtros de diagnósticos', exact: true })
+        .click();
+      await history.getByRole('alert').waitFor();
+      await filterPage.unroute('**/api/v1/ai-diagnostics?*');
+      response = nextResponse();
+      await history.getByRole('button', { name: 'Actualizar diagnósticos', exact: true }).click();
+      const recovered = await response;
+      expect(new URL(recovered.url()).searchParams.get('status')).toBe('pending');
+      expect((await recovered.json()).total).toBe(1);
+      await history.getByText('Página 1 · 1 registros', { exact: true }).waitFor();
+      expect(
+        await filterPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      ).toBe(true);
+      expect(mutations).toEqual([]);
+      await filterPage.screenshot({
+        path: join(directory, 'ai-diagnosis-filters-mobile.png'),
+        fullPage: true,
+      });
+    } finally {
+      await filterPage.close();
+    }
+  }, 45000);
+
+  it('compara dos fotos privadas, conserva selección al filtrar y limpia al eliminar sin nuevo análisis', async () => {
+    const db = app.get(PrismaService);
+    const owner = await db.plot.findUniqueOrThrow({ where: { id: plotId } });
+    const comparisonPlot = await db.plot.create({
+      data: {
+        name: 'Comparación IA · Prueba aislada',
+        locationLabel: 'Chone',
+        ownerId: owner.ownerId,
+      },
+    });
+    const store = app.get(PrivateImageStore);
+    const ids: string[] = [];
+    for (let index = 0; index < 3; index++) {
+      const id = randomUUID(),
+        imageKey = `${randomUUID()}.jpg`;
+      const bytes = await sharp({
+        create: {
+          width: 80,
+          height: 60,
+          channels: 3,
+          background: index === 0 ? '#387e3e' : '#a87122',
+        },
+      })
+        .jpeg()
+        .toBuffer();
+      await store.put(imageKey, bytes);
+      await db.aiDiagnosis.create({
+        data: {
+          id,
+          userId: owner.ownerId,
+          plotId: comparisonPlot.id,
+          requestId: randomUUID(),
+          payloadHash: 'c'.repeat(64),
+          status: 'completed',
+          imageKey,
+          consentVersion: 'demo-v1',
+          consentAt: new Date(),
+          createdAt: new Date(Date.now() - (index + 1) * 60000),
+          expiresAt: new Date(Date.now() + 3600000),
+          notes: `Foto sintética ${index + 1}`,
+          result: {
+            plantPart: 'unknown',
+            visibleSymptoms: ['Sin evaluación real'],
+            possibleCauses: [],
+            uncertainty: 'high',
+            recommendedActions: ['Consultar técnico'],
+            requiresExpertReview: true,
+            disclaimer: 'Resultado simulado, no concluyente',
+          },
+        },
+      });
+      ids.push(id);
+    }
+    const comparisonPage = await page.context().newPage();
+    const mutations: string[] = [];
+    comparisonPage.on('request', (req) => {
+      if (req.url().includes('/api/v1/ai-diagnostics') && req.method() !== 'GET')
+        mutations.push(req.method());
+    });
+    try {
+      await comparisonPage.goto(`${frontendUrl}/diagnostico-ia?plotId=${comparisonPlot.id}`);
+      const history = comparisonPage.locator('section[aria-labelledby="history-title"]');
+      const panel = comparisonPage.locator('#diagnosis-comparison');
+      const add = () => history.getByRole('button', { name: 'Añadir a comparación', exact: true });
+      await add().first().click();
+      await history.getByRole('button', { name: 'Quitar de comparación', exact: true }).waitFor();
+      await add().first().click();
+      const a = panel.getByRole('article', { name: 'Foto A', exact: true });
+      const b = panel.getByRole('article', { name: 'Foto B', exact: true });
+      await a.getByRole('img').waitFor();
+      await b.getByRole('img').waitFor();
+      await comparisonPage.waitForFunction(
+        () =>
+          Array.from(document.querySelectorAll('#diagnosis-comparison img')).length === 2 &&
+          Array.from(
+            document.querySelectorAll<HTMLImageElement>('#diagnosis-comparison img'),
+          ).every((img) => img.complete && img.naturalWidth > 0),
+      );
+      expect(await a.textContent()).toContain('Foto sintética 1');
+      expect(await b.textContent()).toContain('Foto sintética 2');
+      expect(await add().isDisabled()).toBe(true);
+      expect(await panel.textContent()).toContain('No confirma mejoría');
+      expect(await panel.textContent()).toContain('no identifica plantas');
+      await panel.getByRole('button', { name: 'Intercambiar fotos', exact: true }).click();
+      await a.getByText('Foto sintética 2', { exact: true }).waitFor();
+      await b.getByText('Foto sintética 1', { exact: true }).waitFor();
+      expect(await a.textContent()).toContain('Foto sintética 2');
+      expect(await b.textContent()).toContain('Foto sintética 1');
+      await history.getByLabel('Estado del diagnóstico', { exact: true }).selectOption('failed');
+      await history
+        .getByRole('button', { name: 'Aplicar filtros de diagnósticos', exact: true })
+        .click();
+      await history
+        .getByText('No hay diagnósticos disponibles con los filtros aplicados en esta parcela.')
+        .waitFor();
+      expect(await panel.getByRole('img').count()).toBe(2);
+      await comparisonPage.setViewportSize({ width: 1440, height: 1050 });
+      const desktopA = await a.boundingBox(),
+        desktopB = await b.boundingBox();
+      expect(Math.abs(desktopA!.y - desktopB!.y)).toBeLessThan(2);
+      expect(desktopB!.x).toBeGreaterThan(desktopA!.x);
+      await panel.screenshot({ path: join(directory, 'ai-comparison-desktop.png') });
+      await comparisonPage.setViewportSize({ width: 390, height: 844 });
+      const mobileA = await a.boundingBox(),
+        mobileB = await b.boundingBox();
+      expect(mobileB!.y).toBeGreaterThan(mobileA!.y);
+      expect(
+        await comparisonPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      ).toBe(true);
+      await panel.screenshot({ path: join(directory, 'ai-comparison-mobile.png') });
+      expect(mutations).toEqual([]);
+      // An externally deleted diagnosis cannot retain an old image after explicit refresh.
+      await db.aiDiagnosis.update({ where: { id: ids[0] }, data: { deletedAt: new Date() } });
+      await b.getByRole('button', { name: 'Actualizar Foto B', exact: true }).click();
+      await b.getByRole('alert').waitFor();
+      expect(await b.getByRole('img').count()).toBe(0);
+      expect(await b.textContent()).not.toContain('Foto sintética 1');
+      expect(await a.getByRole('img').count()).toBe(1);
+      await history
+        .getByRole('button', { name: 'Limpiar filtros de diagnósticos', exact: true })
+        .click();
+      await history.getByRole('button', { name: 'Quitar de comparación', exact: true }).waitFor();
+      const selected = history.locator('article').filter({
+        has: comparisonPage.getByRole('button', { name: 'Quitar de comparación', exact: true }),
+      });
+      await selected.getByRole('button', { name: 'Eliminar análisis', exact: true }).click();
+      const deleting = comparisonPage.waitForResponse((r) => r.request().method() === 'DELETE');
+      await history.getByRole('button', { name: 'Confirmar eliminación', exact: true }).click();
+      expect((await deleting).status()).toBe(204);
+      await panel
+        .getByRole('article', { name: 'Foto A', exact: true })
+        .getByRole('alert')
+        .waitFor();
+      expect(await panel.getByRole('img').count()).toBe(0);
+      await panel.getByRole('button', { name: 'Limpiar comparación', exact: true }).click();
+      await panel.getByRole('article').waitFor({ state: 'detached' });
+      expect(await panel.getByRole('article').count()).toBe(0);
+      expect(mutations).toEqual(['DELETE']);
+      expect((await fetch(`${apiUrl}/api/v1/ai-diagnostics/${ids[2]}/image`)).status).toBe(401);
+    } finally {
+      await comparisonPage.close();
+    }
+  }, 45000);
+
   it('FARMER crea parcela propia desde móvil sin dispositivos ni datos inventados', async () => {
+    const menu = page.getByRole('button', { name: 'Menú', exact: true });
+    if ((await menu.isVisible()) && (await menu.getAttribute('aria-expanded')) === 'false') {
+      await menu.click();
+    }
     await page.getByRole('link', { name: 'Parcelas', exact: true }).click();
     await page.getByRole('heading', { name: 'Registrar una parcela propia' }).waitFor();
     await page.setViewportSize({ width: 390, height: 844 });
@@ -1728,4 +2462,268 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     );
     expect(errors).toEqual([]);
   });
+  it('navegación compartida muestra clima en escritorio y vuelve al monitoreo desde el menú móvil', async () => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`${frontendUrl}/parcelas/${plotId}/dashboard`);
+    await page.getByRole('link', { name: 'Clima histórico', exact: true }).click();
+    await page
+      .getByRole('heading', { name: 'Clima histórico de la parcela', exact: true })
+      .waitFor();
+    await page.getByRole('heading', { name: 'Ubicación para clima', exact: true }).waitFor();
+    expect(await page.locator('app-page-header .connection').count()).toBe(0);
+    expect(await page.getByRole('heading', { level: 1 }).count()).toBe(1);
+    expect(await page.locator('nav a[aria-current="page"]').count()).toBe(1);
+    expect(await page.locator('nav a[aria-current="page"]').textContent()).toContain(
+      'Clima histórico',
+    );
+    await page.screenshot({ path: join(directory, 'weather-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.getByRole('button', { name: 'Menú', exact: true }).click();
+    await page.getByRole('link', { name: 'Monitoreo', exact: true }).click();
+    await page.waitForURL(`**/parcelas/${plotId}/dashboard#readings`);
+    await page.locator('app-soil-sensor-card').first().waitFor();
+    expect(await page.locator('app-soil-sensor-card').count()).toBe(3);
+    expect(errors).toEqual([]);
+  });
+  it('estado del sistema distingue fallo parcial, evita reintentos simultáneos y recupera salud', async () => {
+    const context = await browser.newContext();
+    const statusPage = await context.newPage();
+    let available = false;
+    let healthRequests = 0;
+    try {
+      await statusPage.route('**/api/v1/health/live', async (route) => {
+        healthRequests++;
+        await route.fulfill({ json: { status: 'ok' } });
+      });
+      await statusPage.route('**/api/v1/health/ready', async (route) => {
+        healthRequests++;
+        await route.fulfill({
+          status: available ? 200 : 503,
+          json: { status: available ? 'ok' : 'error', database: available ? 'up' : 'down' },
+        });
+      });
+      await statusPage.goto(`${frontendUrl}/estado`);
+      await statusPage.getByRole('heading', { name: 'No disponible', exact: true }).waitFor();
+      expect(await statusPage.locator('.badge.good').count()).toBe(1);
+      expect(await statusPage.locator('.service-warning').textContent()).toContain(
+        'ni se modifica el riego',
+      );
+      for (const width of [320, 390, 768, 1440]) {
+        await statusPage.setViewportSize({ width, height: 900 });
+        expect(
+          await statusPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+        if (width === 390 || width === 1440)
+          await statusPage.screenshot({
+            path: join(directory, `system-status-partial-${width}.png`),
+            fullPage: true,
+          });
+      }
+      expect(healthRequests).toBe(2);
+      available = true;
+      await statusPage.getByRole('button', { name: 'Volver a comprobar', exact: true }).click();
+      await statusPage.waitForFunction(() => document.querySelectorAll('.badge.good').length === 2);
+      expect(await statusPage.locator('.service-warning').count()).toBe(0);
+      expect(healthRequests).toBe(4);
+      expect(
+        await statusPage
+          .getByRole('link', { name: 'Acceder a la plataforma', exact: true })
+          .isVisible(),
+      ).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('clima almacenado filtra sin consultas externas y muestra cero, ausencia y fuente en móvil', async () => {
+    const climatePage = await page.context().newPage();
+    let weatherGets = 0;
+    const writes: string[] = [];
+    try {
+      await climatePage.route(`**/api/v1/plots/${plotId}/weather`, async (route) => {
+        weatherGets++;
+        await route.fulfill({
+          json: {
+            provider: 'disabled',
+            profile: {
+              latitude: -0.7,
+              longitude: -80.1,
+              timezone: 'America/Guayaquil',
+              enabled: false,
+              version: 1,
+              updatedAt: '2026-11-01T00:00:00Z',
+              consentAt: null,
+              syncedAt: null,
+              nextAttemptAt: null,
+              lastError: null,
+            },
+            items: [
+              {
+                date: '2026-11-01',
+                variable: 'temperature_2m',
+                unit: '°C',
+                value: 0,
+                quality: 'modeled',
+              },
+              {
+                date: '2026-11-01',
+                variable: 'precipitation',
+                unit: 'mm',
+                value: null,
+                quality: 'missing',
+              },
+            ],
+            provenance: {
+              provider: 'Open-Meteo',
+              dataset: 'ERA5',
+              model: 'era5',
+              requestedLatitude: -0.7,
+              requestedLongitude: -80.1,
+              gridLatitude: -0.75,
+              gridLongitude: -80,
+              timezone: 'America/Guayaquil',
+              resolution: '0.25°',
+              sourceTemporalResolution: 'hourly',
+              aggregation: 'daily',
+              adapterVersion: 'fixture',
+              licence: 'CC BY 4.0',
+              attribution: 'Open-Meteo / ECMWF',
+              fetchedAt: '2026-11-02T00:00:00Z',
+              from: '2026-11-01',
+              to: '2026-11-01',
+            },
+          },
+        });
+      });
+      climatePage.on('request', (request) => {
+        if (request.url().includes(`/plots/${plotId}/weather`) && request.method() !== 'GET')
+          writes.push(request.method());
+      });
+      await climatePage.goto(`${frontendUrl}/parcelas/${plotId}/clima`);
+      await climatePage.locator('tbody tr').first().waitFor();
+      expect(await climatePage.locator('tbody tr').count()).toBe(2);
+      expect(await climatePage.locator('tbody').textContent()).toContain('0 °C');
+      expect(await climatePage.locator('.provenance.stale').textContent()).toContain(
+        'Consulta antigua',
+      );
+      expect(await climatePage.locator('form').count()).toBe(0);
+      for (const width of [320, 390, 768, 1440]) {
+        await climatePage.setViewportSize({ width, height: 1000 });
+        expect(
+          await climatePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+        if (width === 390 || width === 1440)
+          await climatePage.screenshot({
+            path: join(directory, `weather-stored-${width}.png`),
+            fullPage: true,
+          });
+      }
+      await climatePage
+        .getByLabel('Variable meteorológica', { exact: true })
+        .selectOption('precipitation');
+      expect(await climatePage.locator('tbody tr').count()).toBe(1);
+      expect(await climatePage.locator('tbody').textContent()).toContain('No disponible');
+      expect(await climatePage.locator('tbody').textContent()).toContain('Incompleto');
+      await climatePage.getByLabel('Variable meteorológica', { exact: true }).selectOption('');
+      expect(await climatePage.locator('tbody tr').count()).toBe(2);
+      expect(weatherGets).toBe(1);
+      expect(writes).toEqual([]);
+    } finally {
+      await climatePage.close();
+    }
+  });
+
+  it('encabezado común soporta nombres largos en cuatro pantallas y 320/390/768/1440 px', async () => {
+    const db = app.get(PrismaService);
+    const plot = await db.plot.findUniqueOrThrow({ where: { id: plotId } });
+    const owner = await db.user.findUniqueOrThrow({ where: { id: plot.ownerId } });
+    const name =
+      'Parcela de demostración con un nombre largo para validar el encabezado compartido';
+    const userName =
+      'Productora de demostración con nombre largo para comprobar la adaptación móvil';
+    try {
+      await db.plot.update({
+        where: { id: plot.id },
+        data: { name, locationLabel: 'Ubicación de prueba aislada · Chone, Manabí, Ecuador' },
+      });
+      await db.user.update({ where: { id: owner.id }, data: { name: userName } });
+      const routes = [
+        ['dashboard', `/parcelas/${plotId}/dashboard`],
+        ['plots', '/parcelas'],
+        ['diagnosis', `/diagnostico-ia?plotId=${plotId}`],
+        ['weather', `/parcelas/${plotId}/clima`],
+      ];
+      for (const [label, route] of routes) {
+        await page.goto(frontendUrl + route);
+        const header = page.locator('app-page-header');
+        await header.getByText(userName, { exact: true }).waitFor();
+        if (label !== 'plots') await header.getByText(name, { exact: true }).waitFor();
+        expect(await page.getByRole('heading', { level: 1 }).count()).toBe(1);
+        if (label !== 'dashboard') expect(await header.locator('.connection').count()).toBe(0);
+        for (const width of [1440, 768, 390, 320]) {
+          await page.setViewportSize({ width, height: 1000 });
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          ).toBe(true);
+          expect(await header.getByRole('button', { name: 'Salir', exact: true }).isVisible()).toBe(
+            true,
+          );
+          if (width === 1440 || width === 390) {
+            await header.screenshot({ path: join(directory, `header-${label}-${width}.png`) });
+            await page.screenshot({
+              path: join(directory, `unified-${label}-${width}.png`),
+              fullPage: false,
+            });
+          }
+          const main = await page.locator('.main-area').boundingBox();
+          expect(main).not.toBeNull();
+          expect(Math.round(main!.x)).toBe(width <= 900 ? 0 : 240);
+        }
+      }
+      await page.locator('app-page-header').getByRole('link', { name: 'Cambiar parcela' }).click();
+      await page.waitForURL('**/parcelas');
+      await page.getByRole('heading', { name: 'Mis parcelas', exact: true }).waitFor();
+    } finally {
+      await db.plot.update({
+        where: { id: plot.id },
+        data: { name: plot.name, locationLabel: plot.locationLabel },
+      });
+      await db.user.update({ where: { id: owner.id }, data: { name: owner.name } });
+    }
+    expect(errors).toEqual([]);
+  }, 45000);
+  it('salir desde IA revoca sesión, limpia la fotografía y protege la recarga', async () => {
+    // Use the current cookie jar, not a copy of another context's rotating cookie.
+    const route = `/diagnostico-ia?plotId=${plotId}`;
+    await page.goto(frontendUrl + route);
+    await page.getByRole('heading', { name: 'Fotografía de la planta', exact: true }).waitFor();
+    const bytes = await sharp({
+      create: { width: 40, height: 30, channels: 3, background: '#387e3e' },
+    })
+      .jpeg()
+      .toBuffer();
+    await page
+      .getByLabel('Subir imagen de la planta', { exact: true })
+      .setInputFiles({ name: 'fixture.jpg', mimeType: 'image/jpeg', buffer: bytes });
+    await page.locator('img.preview').waitFor();
+    const response = page.waitForResponse(
+      (value) => value.url().endsWith('/api/v1/auth/logout') && value.request().method() === 'POST',
+    );
+    await page
+      .locator('app-page-header')
+      .getByRole('button', { name: 'Salir', exact: true })
+      .click();
+    expect((await response).status()).toBe(204);
+    await page.waitForURL('**/login');
+    expect(
+      await page.locator('app-page-header, img.preview, app-diagnosis-comparison-card').count(),
+    ).toBe(0);
+    await page.goto(frontendUrl + route);
+    await page.waitForURL('**/login');
+    await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).waitFor();
+    expect(errors).toEqual([]);
+  }, 45000);
 });

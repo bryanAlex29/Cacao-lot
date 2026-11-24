@@ -262,3 +262,48 @@ export interface SoilMoistureAlert extends TelemetrySubscription {
   closeReason: MoistureAlertCloseReason | null;
   acknowledgedAt: string | null;
 }
+export type WeatherVariable = 'temperature_2m' | 'relative_humidity_2m' | 'precipitation' | 'et0_fao_evapotranspiration';
+export interface WeatherProfileSummary {
+  latitude: number;
+  longitude: number;
+  timezone: 'America/Guayaquil' | 'Pacific/Galapagos';
+  enabled: boolean;
+  version: number;
+  updatedAt: string;
+  consentAt: string | null;
+  syncedAt: string | null;
+  nextAttemptAt: string | null;
+  lastError: string | null;
+}
+export interface WeatherObservationSummary {
+  date: string;
+  variable: WeatherVariable;
+  unit: '°C' | '%' | 'mm';
+  value: number | null;
+  quality: 'modeled' | 'missing';
+}
+export interface WeatherProvenance {
+  provider: 'Open-Meteo';
+  dataset: 'ERA5';
+  model: 'era5';
+  requestedLatitude: number;
+  requestedLongitude: number;
+  gridLatitude: number;
+  gridLongitude: number;
+  timezone: string;
+  resolution: string;
+  sourceTemporalResolution: string;
+  aggregation: string;
+  adapterVersion: string;
+  licence: string;
+  attribution: string;
+  fetchedAt: string;
+  from: string;
+  to: string;
+}
+export interface WeatherSnapshot {
+  provider: 'disabled' | 'open-meteo';
+  profile: WeatherProfileSummary | null;
+  items: WeatherObservationSummary[];
+  provenance: WeatherProvenance | null;
+}

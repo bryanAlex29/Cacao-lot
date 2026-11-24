@@ -2,6 +2,8 @@ import { Component, DestroyRef, effect, inject, input, signal, untracked } from 
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Subscription } from 'rxjs';
+import { DeviceManagementComponent } from './device-management.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 import {
   DevicesApi,
   RegisteredDevice,
@@ -11,19 +13,22 @@ import {
 @Component({
   selector: 'app-device-inventory',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, DeviceManagementComponent, IconComponent],
   template: `<section
     [attr.aria-labelledby]="'inventory-title-' + plotId()"
     [attr.aria-busy]="busy()"
   >
     <div class="heading">
-      <h4 [id]="'inventory-title-' + plotId()">Dispositivos y sensores</h4>
+      <h4 [id]="'inventory-title-' + plotId()">
+        <app-icon name="monitor" /> Dispositivos y sensores
+      </h4>
       <button type="button" (click)="load(offset())" [disabled]="busy()">
         Actualizar dispositivos
       </button>
     </div>
     <p>
-      Inventario de esta parcela, solo lectura. No permite asignar equipos ni controlar la válvula.
+      Inventario de esta parcela. No permite asignar equipos a otras cuentas ni controlar la
+      válvula.
     </p>
     @if (busy()) {
       <p role="status">Consultando dispositivos…</p>
@@ -48,7 +53,7 @@ import {
       }
       @for (device of devices(); track device.id) {
         <div class="device" [attr.data-device-id]="device.id">
-          <h5>{{ device.serial }}</h5>
+          <h5><app-icon name="monitor" /> {{ device.serial }}</h5>
           <p class="source" [class.demo]="device.source === 'demo'">
             {{
               device.source === 'demo'
@@ -56,33 +61,55 @@ import {
                 : 'REAL · Equipo registrado para datos reales'
             }}
           </p>
-          <dl>
-            <dt>Habilitación</dt>
-            <dd>{{ device.isActive ? 'Habilitado' : 'Deshabilitado' }}</dd>
-            <dt>Conexión al consultar</dt>
-            <dd>{{ connection(device) }}</dd>
-            <dt>Último contacto</dt>
-            <dd>
-              {{
-                device.lastSeenAt
-                  ? (device.lastSeenAt | date: 'dd/MM/yyyy HH:mm:ss')
-                  : 'Sin contacto registrado'
-              }}
-            </dd>
-            <dt>Intervalo esperado</dt>
-            <dd>{{ device.expectedIntervalSeconds }} segundos</dd>
+          <dl class="device-meta">
+            <div>
+              <dt>Habilitación</dt>
+              <dd>
+                <span class="state-chip">{{
+                  device.isActive ? 'Habilitado' : 'Deshabilitado'
+                }}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Conexión al consultar</dt>
+              <dd>
+                <span
+                  class="state-chip"
+                  [class.recent]="
+                    device.isActive && device.status === 'ONLINE' && !!device.lastSeenAt
+                  "
+                  >{{ connection(device) }}</span
+                >
+              </dd>
+            </div>
+            <div>
+              <dt>Último contacto</dt>
+              <dd>
+                {{
+                  device.lastSeenAt
+                    ? (device.lastSeenAt | date: 'dd/MM/yyyy HH:mm:ss')
+                    : 'Sin contacto registrado'
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>Intervalo esperado</dt>
+              <dd>{{ device.expectedIntervalSeconds }} segundos</dd>
+            </div>
           </dl>
-          <details>
+          <details class="sensors">
             <summary>Sensores registrados · {{ device.sensors.length }}</summary>
-            @for (sensor of device.sensors; track sensor.id) {
-              <p class="sensor">
-                <strong>{{ sensorName(sensor) }}</strong> · {{ unit(sensor) }} ·
-                {{ sensor.enabled ? 'Habilitado' : 'Deshabilitado' }}<br />Zona:
-                {{ sensor.zone ?? 'Sin zona registrada' }} · Código: {{ sensor.code }}
-              </p>
-            } @empty {
-              <p>Sin sensores registrados. No se completa el inventario con datos de ejemplo.</p>
-            }
+            <div class="sensor-grid">
+              @for (sensor of device.sensors; track sensor.id) {
+                <p class="sensor">
+                  <strong>{{ sensorName(sensor) }}</strong> · {{ unit(sensor) }} ·
+                  {{ sensor.enabled ? 'Habilitado' : 'Deshabilitado' }}<br />Zona:
+                  {{ sensor.zone ?? 'Sin zona registrada' }} · Código: {{ sensor.code }}
+                </p>
+              } @empty {
+                <p>Sin sensores registrados. No se completa el inventario con datos de ejemplo.</p>
+              }
+            </div>
           </details>
         </div>
       }
@@ -100,107 +127,19 @@ import {
         </button>
       </div>
     }
+    @if (canManage()) {
+      <app-device-management [plotId]="plotId()" [devices]="devices()" (changed)="load(offset())" />
+    }
     <p>
       Habilitado no significa conectado. El inventario no acredita instalación física, calibración
-      ni calidad de las lecturas. No muestra claves IoT.
+      ni calidad de las lecturas. La lista no permite recuperar claves IoT existentes.
     </p>
   </section>`,
-  styles: [
-    `
-      :host {
-        display: block;
-        min-width: 0;
-        margin-top: 16px;
-      }
-      section {
-        border-top: 1px solid #e2e7e2;
-        padding-top: 16px;
-      }
-      .heading,
-      .pagination {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-        justify-content: space-between;
-      }
-      h4,
-      h5 {
-        font-size: 16px;
-        margin: 0;
-        color: #174b2d;
-        overflow-wrap: anywhere;
-      }
-      p,
-      dl,
-      summary,
-      .pagination {
-        font-size: 12px;
-        line-height: 1.6;
-        overflow-wrap: anywhere;
-      }
-      p {
-        color: #526158;
-      }
-      .device {
-        border: 1px solid #e2e7e2;
-        border-radius: 10px;
-        padding: 12px;
-        margin: 12px 0;
-      }
-      dl {
-        margin: 12px 0;
-      }
-      dt {
-        font-weight: bold;
-      }
-      dd {
-        margin: 0 0 8px;
-      }
-      .source {
-        background: #e8f7e6;
-        color: #174b2d;
-        padding: 8px;
-      }
-      .demo {
-        background: #dceff7;
-        color: #114f70;
-      }
-      .sensor {
-        border-top: 1px solid #e2e7e2;
-        padding-top: 8px;
-      }
-      button {
-        min-height: 44px;
-        max-width: 100%;
-        padding: 8px 10px;
-        color: #17632e;
-        background: white;
-        border: 1px solid #a9c7ae;
-        border-radius: 8px;
-        cursor: pointer;
-      }
-      button:disabled {
-        opacity: 0.6;
-        cursor: default;
-      }
-      summary {
-        cursor: pointer;
-        padding: 10px 0;
-      }
-      button:focus-visible,
-      summary:focus-visible {
-        outline: 3px solid #1263bd;
-        outline-offset: 2px;
-      }
-      [role='alert'] {
-        color: #8b2020;
-      }
-    `,
-  ],
+  styleUrl: './device-inventory.component.css',
 })
 export class DeviceInventoryComponent {
   readonly plotId = input.required<string>();
+  readonly canManage = input(false);
   private readonly api = inject(DevicesApi);
   private request = new Subscription();
   readonly devices = signal<RegisteredDevice[]>([]);

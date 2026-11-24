@@ -3,10 +3,11 @@ import { Component } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
-import { of } from 'rxjs';
-import { beforeEach, describe, it, expect } from 'vitest';
+import { of, Subject } from 'rxjs';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { HealthService } from '../../core/health/health.service';
+import type { SystemHealth } from '../../core/health/health.service';
 import { SystemStatusComponent } from './system-status.component';
 
 @Component({ standalone: true, template: '' })
@@ -33,10 +34,40 @@ describe('Pantalla de base técnica', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const element: HTMLElement = fixture.nativeElement;
-    expect(element.textContent).toContain('Sin datos de sensores todavía.');
+    expect(element.textContent).toContain('no demuestra que un ESP32 esté enviando datos');
+    expect(element.textContent).toContain('no hay predicción hídrica validada');
     expect(element.textContent).toContain('No disponible');
     expect(element.textContent).not.toContain('Sistema en línea');
     expect(element.querySelector('h1')?.textContent).toContain('cuidar el cacao');
+    expect(element.querySelectorAll('.service.unavailable')).toHaveLength(1);
+    expect(element.querySelector('.service-warning')?.textContent).toContain('volver a comprobar');
+  });
+  it('comprobación pendiente evita duplicados y reintentar recupera estados sin verde obsoleto', async () => {
+    const checks = new Subject<SystemHealth>();
+    const check = vi.spyOn(TestBed.inject(HealthService), 'check').mockReturnValue(checks);
+    const fixture = TestBed.createComponent(SystemStatusComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const root: HTMLElement = fixture.nativeElement;
+    component.refresh();
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(root.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
+    expect(root.querySelector('.badge.good')).toBeNull();
+    checks.next({ api: 'up', database: 'down' });
+    checks.complete();
+    fixture.detectChanges();
+    expect(root.querySelectorAll('.badge.good')).toHaveLength(1);
+    const retry = new Subject<SystemHealth>();
+    check.mockReturnValue(retry);
+    component.refresh();
+    fixture.detectChanges();
+    expect(root.querySelector('.badge.good')).toBeNull();
+    retry.next({ api: 'up', database: 'up' });
+    retry.complete();
+    fixture.detectChanges();
+    expect(root.querySelectorAll('.badge.good')).toHaveLength(2);
+    expect(root.querySelector('.service-warning')).toBeNull();
+    expect(root.querySelector('.last-check')?.getAttribute('role')).toBe('status');
   });
 
   it('ofrece acceso al login sin sesión y no muestra el botón de parcelas', async () => {

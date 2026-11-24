@@ -68,6 +68,7 @@ model User {
   moisturePolicies           MoistureAlertPolicy[]
   moisturePolicyAudits       MoisturePolicyAudit[]
   acknowledgedMoistureAlerts MoistureAlert[]
+  aiDiagnoses                AiDiagnosis[]
 
   @@map("users")
 }
@@ -100,6 +101,8 @@ model Plot {
   thresholdAudits SensorThresholdAudit[]
   offlineAlerts   OfflineAlert[]
   moistureAlerts  MoistureAlert[]
+  aiDiagnoses     AiDiagnosis[]
+  weatherProfile  WeatherProfile?
 
   @@index([ownerId, archivedAt])
   @@map("plots")
@@ -320,4 +323,98 @@ model MoistureAlert {
   @@index([deviceId, source, detectedAt(sort: Desc), id(sort: Desc)], map: "moisture_alerts_page_idx")
   @@index([sensorId, closedAt])
   @@map("moisture_alerts")
+}
+
+model AiDiagnosis {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plotId         String    @map("plot_id") @db.Uuid
+  plot           Plot      @relation(fields: [plotId], references: [id], onDelete: Restrict)
+  requestId      String    @map("request_id") @db.Uuid
+  payloadHash    String    @map("payload_hash") @db.VarChar(64)
+  provider       String    @default("mock") @db.VarChar(32)
+  status         String    @db.VarChar(16)
+  imageKey       String?   @map("image_key") @db.VarChar(64)
+  mimeType       String    @default("image/jpeg") @map("mime_type") @db.VarChar(32)
+  notes          String?   @db.VarChar(1000)
+  result         Json?
+  errorCode      String?   @map("error_code") @db.VarChar(32)
+  consentVersion String    @map("consent_version") @db.VarChar(32)
+  consentAt      DateTime  @map("consent_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(3)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  @@unique([userId, requestId])
+  @@index([userId, createdAt])
+  @@index([plotId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([expiresAt])
+  @@map("ai_diagnoses")
+}
+
+model WeatherProfile {
+  plotId         String   @id @map("plot_id") @db.Uuid
+  plot           Plot     @relation(fields: [plotId], references: [id], onDelete: Restrict)
+  latitude       Float
+  longitude      Float
+  timezone       String   @db.VarChar(64)
+  enabled        Boolean  @default(false)
+  version        Int      @default(1)
+  updatedBy      String   @map("updated_by") @db.Uuid
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  consentAt      DateTime? @map("consent_at") @db.Timestamptz(3)
+  attemptAt      DateTime? @map("attempt_at") @db.Timestamptz(3)
+  syncedAt       DateTime? @map("synced_at") @db.Timestamptz(3)
+  lastError      String?  @map("last_error") @db.VarChar(32)
+  batches        WeatherBatch[]
+  revisions      WeatherProfileRevision[]
+
+  @@map("weather_profiles")
+}
+
+model WeatherProfileRevision {
+  id        String @id @default(uuid()) @db.Uuid
+  plotId    String @map("plot_id") @db.Uuid
+  profile   WeatherProfile @relation(fields: [plotId], references: [plotId], onDelete: Restrict)
+  version   Int
+  actorId   String @map("actor_id") @db.Uuid
+  snapshot  Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([plotId, version])
+  @@map("weather_profile_revisions")
+}
+
+model WeatherBatch {
+  id             String @id @default(uuid()) @db.Uuid
+  plotId         String @map("plot_id") @db.Uuid
+  profile        WeatherProfile @relation(fields: [plotId], references: [plotId], onDelete: Restrict)
+  profileVersion Int @map("profile_version")
+  fromDate       String @map("from_date") @db.VarChar(10)
+  toDate         String @map("to_date") @db.VarChar(10)
+  fetchedAt      DateTime @map("fetched_at") @db.Timestamptz(3)
+  provenance     Json
+  raw            Json
+  observations   WeatherObservation[]
+
+  @@index([plotId, profileVersion, fetchedAt(sort: Desc)])
+  @@map("weather_batches")
+}
+
+model WeatherObservation {
+  id             String @id @default(uuid()) @db.Uuid
+  plotId         String @map("plot_id") @db.Uuid
+  profileVersion Int @map("profile_version")
+  date           String @db.VarChar(10)
+  variable       String @db.VarChar(40)
+  unit           String @db.VarChar(12)
+  value          Float?
+  quality        String @db.VarChar(16)
+  batchId        String @map("batch_id") @db.Uuid
+  batch          WeatherBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@unique([plotId, profileVersion, date, variable])
+  @@map("weather_observations")
 }

@@ -6,6 +6,13 @@ export interface Environment {
   DATABASE_URL: string;
   TELEMETRY_MODE: 'real' | 'demo';
   JWT_SECRET: string;
+  AI_PROVIDER: 'mock' | 'disabled';
+  AI_MAX_IMAGE_MB: number;
+  AI_DAILY_LIMIT_PER_USER: number;
+  AI_REQUEST_TIMEOUT_MS: number;
+  IMAGE_RETENTION_DAYS: number;
+  IMAGE_STORAGE_PATH?: string;
+  WEATHER_PROVIDER: 'disabled' | 'open-meteo';
 }
 
 export function validateEnvironment(input: Record<string, unknown>): Environment {
@@ -57,6 +64,23 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
       'JWT_SECRET requiere 32 bytes aleatorios en hexadecimal; ejecutar setup:auth-env',
     );
   }
+  const aiProvider = input['AI_PROVIDER'] ?? (nodeEnv === 'production' ? 'disabled' : 'mock');
+  if (
+    !['mock', 'disabled'].includes(String(aiProvider)) ||
+    (nodeEnv === 'production' && aiProvider !== 'disabled')
+  ) {
+    throw new Error('AI_PROVIDER: solo mock fuera de producción o disabled');
+  }
+  const bounded = (key: string, fallback: number, max: number) => {
+    const value = Number(input[key] ?? fallback);
+    if (!Number.isInteger(value) || value < 1 || value > max) throw new Error(`${key} inválido`);
+    return value;
+  };
+  const weather = input['WEATHER_PROVIDER'] ?? 'disabled';
+  if (!['disabled', 'open-meteo'].includes(String(weather)))
+    throw new Error('WEATHER_PROVIDER inválido');
+  if (weather === 'open-meteo' && input['WEATHER_NONCOMMERCIAL_CONFIRMED'] !== 'true')
+    throw new Error('Open-Meteo gratuito requiere WEATHER_NONCOMMERCIAL_CONFIRMED=true');
   return {
     NODE_ENV: nodeEnv as Environment['NODE_ENV'],
     HOST: host,
@@ -65,5 +89,14 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
     DATABASE_URL: databaseUrl,
     TELEMETRY_MODE: mode,
     JWT_SECRET: secret,
+    AI_PROVIDER: aiProvider as 'mock' | 'disabled',
+    AI_MAX_IMAGE_MB: bounded('AI_MAX_IMAGE_MB', 8, 8),
+    AI_DAILY_LIMIT_PER_USER: bounded('AI_DAILY_LIMIT_PER_USER', 5, 100),
+    AI_REQUEST_TIMEOUT_MS: bounded('AI_REQUEST_TIMEOUT_MS', 10000, 30000),
+    IMAGE_RETENTION_DAYS: bounded('IMAGE_RETENTION_DAYS', 7, 30),
+    WEATHER_PROVIDER: weather as Environment['WEATHER_PROVIDER'],
+    ...(input['IMAGE_STORAGE_PATH']
+      ? { IMAGE_STORAGE_PATH: String(input['IMAGE_STORAGE_PATH']) }
+      : {}),
   };
 }

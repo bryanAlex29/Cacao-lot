@@ -37,6 +37,9 @@ import { ThresholdHistoryFacade } from '../../core/sensor-thresholds/threshold-h
 import { IrrigationHistoryComponent } from './irrigation-history.component';
 import { ReportsPanelComponent } from './reports-panel.component';
 import { HistoryPeriodComponent } from './history-period.component';
+import { AppSidebarComponent, DashboardSection } from '../../shared/ui/app-sidebar.component';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { HeaderConnection, PageHeaderComponent } from '../../shared/ui/page-header.component';
 
 interface DeviceOption {
   id: string;
@@ -64,12 +67,25 @@ interface DeviceOption {
     IrrigationHistoryComponent,
     ReportsPanelComponent,
     HistoryPeriodComponent,
+    AppSidebarComponent,
+    IconComponent,
+    PageHeaderComponent,
   ],
   providers: [TelemetryFacade, SensorThresholdsFacade, ThresholdHistoryFacade],
   templateUrl: './dashboard.component.html',
-  styleUrl: './dashboard.component.css',
+  styleUrls: ['./dashboard.component.css', '../../shared/ui/workspace.css'],
 })
 export class DashboardComponent implements OnInit {
+  navigateSection(section: DashboardSection): void {
+    const actions: Record<DashboardSection, () => void> = {
+      readings: () => this.scrollToReadings(),
+      history: () => this.scrollToHistory(),
+      'irrigation-history': () => this.scrollToIrrigation(),
+      alerts: () => this.scrollToAlerts(),
+      reports: () => this.scrollToReports(),
+    };
+    actions[section]();
+  }
   readonly auth = inject(AuthService);
   readonly telemetry = inject(TelemetryFacade);
   readonly thresholds = inject(SensorThresholdsFacade);
@@ -123,6 +139,21 @@ export class DashboardComponent implements OnInit {
         unknown: 'Sin contacto registrado',
       })[this.telemetry.status()],
   );
+  readonly headerConnection = computed<HeaderConnection | null>(() => {
+    if (!this.selected()) return null;
+    const timestamp = this.timestamp();
+    return {
+      label:
+        this.telemetry.status() === 'online' && this.stale()
+          ? 'Conexión o datos sin actualizar'
+          : this.telemetry.status() === 'online' && !timestamp
+            ? 'Sin lecturas disponibles'
+            : this.statusLabel(),
+      healthy: !this.stale() && !!timestamp,
+      timestamp,
+      source: this.source(),
+    };
+  });
   readonly environmentAssessments = computed(() => {
     const reading = this.reading();
     const assess = (code: 'temperatureC' | 'airHumidityPct') =>

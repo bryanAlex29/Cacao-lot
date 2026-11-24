@@ -3,6 +3,17 @@ import { authGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
+    path: 'parcelas/:id/clima',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/weather/weather.component').then((m) => m.WeatherComponent),
+  },
+  {
+    path: 'diagnostico-ia',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/ai-diagnosis/ai-diagnosis.component').then((m) => m.AiDiagnosisComponent),
+  },
+  {
     path: 'parcelas/:id/dashboard',
     canActivate: [authGuard],
     loadComponent: () =>

@@ -160,7 +160,12 @@ export function chartSegments(
           Inicio incluido · fin excluido · hora local del navegador. Los límites no certifican
           calibración.
         </p>
-        <div class="table-wrap">
+        <div
+          class="table-wrap table-scroll"
+          tabindex="0"
+          role="region"
+          aria-label="Vigencia de rangos históricos"
+        >
           <table>
             <thead>
               <tr>
@@ -202,7 +207,12 @@ export function chartSegments(
       </details>
       <details>
         <summary>Ver tabla de valores</summary>
-        <div class="table-wrap">
+        <div
+          class="table-wrap table-scroll"
+          tabindex="0"
+          role="region"
+          aria-label="Valores históricos de humedad"
+        >
           <table>
             <thead>
               <tr>
@@ -244,6 +254,7 @@ export function chartSegments(
         </div>
       </details>
     }`,
+  styleUrl: '../../shared/ui/data-panel.css',
   styles: [
     `
       svg {
@@ -296,16 +307,8 @@ export function chartSegments(
         overflow: auto;
         max-height: 260px;
       }
-      table {
-        border-collapse: collapse;
-        width: 100%;
-        font-size: 12px;
-      }
       th,
       td {
-        text-align: left;
-        border-bottom: 1px solid #e2e7e2;
-        padding: 8px;
         white-space: nowrap;
       }
     `,

@@ -1,7 +1,7 @@
 <main class="login-layout">
   <section class="identity" aria-label="CacaoSmart IoT">
     <span class="eyebrow">CACAO · TECNOLOGÍA · TERRITORIO</span>
-    <h1>CacaoSmart IoT</h1>
+    <h1><app-icon name="leaf" /> CacaoSmart IoT</h1>
     <p class="tagline">Información para cuidar<br />lo que cultivamos.</p>
     <p>Monitoreo y riego inteligente para cultivos de cacao en Chone, Manabí.</p>
     <span class="event">TerriTech Hackathon · CITIC 2026</span>
@@ -21,7 +21,9 @@
           maxlength="254"
           required
           [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
-          aria-describedby="email-error"
+          [attr.aria-describedby]="
+            form.controls.email.touched && form.controls.email.invalid ? 'email-error' : null
+          "
         />
         @if (form.controls.email.touched && form.controls.email.invalid) {
           <small id="email-error">Ingresa un correo electrónico válido.</small>
@@ -35,7 +37,15 @@
           maxlength="128"
           required
           [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid"
+          [attr.aria-describedby]="
+            form.controls.password.touched && form.controls.password.invalid
+              ? 'login-password-error'
+              : null
+          "
         />
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <small id="login-password-error">Ingresa tu contraseña, hasta 128 caracteres.</small>
+        }
         @if (error()) {
           <p class="error" role="alert">{{ error() }}</p>
         }
@@ -44,17 +54,21 @@
         </button>
       </form>
       <p class="privacy">
-        La sesión dura hasta 15 minutos y se conserva solo en memoria. Al recargar tendrás que
-        iniciar sesión otra vez.
+        Sesión renovable de hasta 8 horas. El acceso se mantiene en memoria y se recupera al
+        recargar mediante una cookie protegida. Usa Salir al terminar, especialmente en equipos
+        compartidos.
       </p>
       <p class="auth-switch">
         ¿No tienes cuenta? <a routerLink="/registro">Crear cuenta de agricultor</a>
       </p>
       <a routerLink="/estado">Consultar estado del sistema</a>
-      <p class="setup">
-        Instalación nueva: el primer administrador se crea desde la terminal con
-        <code>npm run admin:create</code>, siguiendo el README. No hay cuentas por defecto.
-      </p>
+      <details class="setup">
+        <summary>Información para instalar el sistema</summary>
+        <p>
+          Instalación nueva: el primer administrador se crea desde la terminal con
+          <code>npm run admin:create</code>, siguiendo el README. No hay cuentas por defecto.
+        </p>
+      </details>
     </div>
   </section>
 </main>

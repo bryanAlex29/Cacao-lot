@@ -2,14 +2,15 @@ import { Component, effect, inject, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import type { DeviceOfflineAlert, TelemetrySubscription } from '@cacaosmart/contracts';
 import { OfflineAlertsFacade } from '../../core/alerts/offline-alerts.facade';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-offline-alerts-panel',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, IconComponent],
   providers: [OfflineAlertsFacade],
   template: `<div [attr.aria-busy]="alerts.busy()">
-    <p class="note">Solo desconexión del dispositivo. No evalúa humedad ni controla el riego.</p>
+    <h3 class="alert-heading"><app-icon name="monitor" /> Conexión del dispositivo</h3>
     @if (selection()?.source === 'demo') {
       <p class="demo">DEMO · Alertas de demostración</p>
     }
@@ -38,17 +39,21 @@ import { OfflineAlertsFacade } from '../../core/alerts/offline-alerts.facade';
               ><span aria-hidden="true">{{ alert.closedAt ? '◷' : '⚠' }}</span>
               {{ conditionLabel(alert) }}</strong
             >
-            <p>
-              Sin mensajes durante más de {{ alert.expectedIntervalSeconds * 5 }} s (5 intervalos de
-              envío).
-            </p>
-            <p>Detectada {{ alert.detectedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</p>
-            <p>
-              Último contacto de ese episodio: {{ alert.lastSeenAt | date: 'dd/MM/yyyy HH:mm:ss' }}
-            </p>
+            <p class="alert-time">Detectada {{ alert.detectedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</p>
             @if (alert.closedAt) {
               <p>Cierre {{ alert.closedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</p>
             }
+            <details class="alert-evidence">
+              <summary>Evidencia de la desconexión</summary>
+              <p>
+                Sin mensajes durante más de {{ alert.expectedIntervalSeconds * 5 }} s (5 intervalos
+                de envío).
+              </p>
+              <p>
+                Último contacto de ese episodio:
+                {{ alert.lastSeenAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+              </p>
+            </details>
             @if (alert.acknowledgedAt) {
               <p class="acknowledged">
                 Reconocida {{ alert.acknowledgedAt | date: 'dd/MM/yyyy HH:mm:ss' }}
@@ -96,93 +101,22 @@ import { OfflineAlertsFacade } from '../../core/alerts/offline-alerts.facade';
         </div>
       }
       @if (alerts.checkedAt()) {
-        <p class="note">Consultado {{ alerts.checkedAt() | date: 'HH:mm:ss' }} · hora local</p>
+        <p class="checked-at">
+          Consultado {{ alerts.checkedAt() | date: 'HH:mm:ss' }} · hora local
+        </p>
       }
     }
     @if (alerts.message()) {
       <p role="status">{{ alerts.message() }}</p>
     }
-    <p class="note">
-      Reconocer no significa recuperar el contacto. La ausencia de alertas no confirma conexión ni
-      condiciones normales del cultivo.
-    </p>
+    <p class="note">Reconocer no significa recuperar el contacto.</p>
+    <details class="alert-help">
+      <summary>Alcance de estas alertas</summary>
+      <p>Solo desconexión del dispositivo. No evalúa humedad ni controla el riego.</p>
+      <p>La ausencia de alertas no confirma conexión ni condiciones normales del cultivo.</p>
+    </details>
   </div>`,
-  styles: [
-    `
-      :host {
-        display: block;
-        min-width: 0;
-      }
-      p {
-        font-size: 12px;
-        line-height: 1.6;
-        overflow-wrap: anywhere;
-      }
-      .note {
-        color: #526158;
-        font-size: 11px;
-      }
-      .demo {
-        background: #dceff7;
-        color: #114f70;
-        padding: 8px;
-        border-radius: 8px;
-      }
-      ul {
-        list-style: none;
-        padding: 0;
-      }
-      li {
-        border: 1px solid #d9e2db;
-        border-radius: 10px;
-        padding: 10px;
-        margin: 12px 0;
-        background: #f5f7f5;
-      }
-      li.active {
-        background: #fff3d6;
-        border-color: #c49131;
-      }
-      li strong {
-        display: block;
-        color: #704900;
-        font-size: 13px;
-      }
-      li p {
-        margin: 6px 0;
-      }
-      .acknowledged {
-        font-weight: 600;
-      }
-      button {
-        font-size: 12px;
-        min-height: 36px;
-        max-width: 100%;
-        white-space: normal;
-        border: 1px solid #a9c7ae;
-        border-radius: 8px;
-        padding: 8px 11px;
-        color: #17632e;
-        background: white;
-        cursor: pointer;
-      }
-      button:disabled {
-        opacity: 0.6;
-        cursor: default;
-      }
-      button:focus-visible {
-        outline: 3px solid #1263bd;
-        outline-offset: 2px;
-      }
-      .pages {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        font-size: 11px;
-      }
-    `,
-  ],
+  styleUrl: '../../shared/ui/alert-panel.css',
 })
 export class OfflineAlertsPanelComponent {
   readonly selection = input<TelemetrySubscription | null>(null);

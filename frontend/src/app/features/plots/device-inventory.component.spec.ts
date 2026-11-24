@@ -1,9 +1,13 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DeviceInventoryComponent } from './device-inventory.component';
 import type { RegisteredDevice } from '../../core/devices/devices-api.service';
+import { AuthService } from '../../core/auth/auth.service';
+import { DeviceManagementComponent } from './device-management.component';
 
 describe('Inventario de dispositivos por parcela, solo lectura', () => {
   const device: RegisteredDevice = {
@@ -67,13 +71,18 @@ describe('Inventario de dispositivos por parcela, solo lectura', () => {
       },
     ],
   };
-  async function setup() {
+  async function setup(canManage = false) {
     await TestBed.configureTestingModule({
       imports: [DeviceInventoryComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: { user: signal({ role: 'ADMIN' }) } },
+      ],
     }).compileComponents();
     const fixture = TestBed.createComponent(DeviceInventoryComponent);
     fixture.componentRef.setInput('plotId', 'plot');
+    fixture.componentRef.setInput('canManage', canManage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     return {
@@ -125,6 +134,41 @@ describe('Inventario de dispositivos por parcela, solo lectura', () => {
       expect(text).toContain(label);
     expect(fixture.nativeElement.querySelectorAll('.sensor')).toHaveLength(6);
     expect(fixture.nativeElement.querySelector('form')).toBeNull();
+    http.verify();
+  });
+  it('mantiene el gestor y la clave nueva al refrescar lista; inventario precede administración', async () => {
+    const { fixture, first, http, component } = await setup(true);
+    first.flush(page());
+    fixture.detectChanges();
+    const manager = fixture.debugElement.query(By.directive(DeviceManagementComponent))
+      .componentInstance as DeviceManagementComponent;
+    manager.form.setValue({
+      serial: 'equipo-nuevo',
+      source: 'real',
+      expectedIntervalSeconds: 60,
+      confirmed: true,
+    });
+    manager.create();
+    http
+      .expectOne('/api/v1/plots/plot/devices')
+      .flush({ id: 'new-device', plotId: 'plot', deviceKey: 'b'.repeat(64) });
+    const reload = http.expectOne('/api/v1/plots/plot/devices?limit=10&offset=0');
+    fixture.detectChanges();
+    expect(
+      fixture.debugElement.query(By.directive(DeviceManagementComponent)).componentInstance,
+    ).toBe(manager);
+    expect(manager.credential()?.deviceKey).toBe('b'.repeat(64));
+    reload.flush(page());
+    fixture.detectChanges();
+    const root: HTMLElement = fixture.nativeElement;
+    const devices = root.querySelector('.device')!;
+    const admin = root.querySelector('app-device-management')!;
+    expect(devices.compareDocumentPosition(admin) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    component.load(0);
+    http.expectOne('/api/v1/plots/plot/devices?limit=10&offset=0').flush(page());
+    fixture.detectChanges();
+    expect(manager.credential()?.deviceKey).toBe('b'.repeat(64));
+    expect(root.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('b'.repeat(64));
     http.verify();
   });
   it('proyecta exclusivamente campos públicos sin conservar ni renderizar secretos extra', async () => {

@@ -6,125 +6,14 @@
   grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
 }
-.sidebar {
-  background: #002d1b;
-  color: white;
-  padding: 30px 20px;
-  display: flex;
-  flex-direction: column;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 22px;
-}
-.brand > span {
-  color: #e6b15c;
-  font-size: 42px;
-}
-.brand small {
-  font-size: 14px;
-  color: #a9dca8;
-}
-.brand-caption {
-  text-align: center;
-  font-size: 12px;
-  color: #c0d5c6;
-  line-height: 1.7;
-  margin: 14px 0 30px;
-}
-.sidebar nav {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sidebar nav a,
-.pending {
-  padding: 12px 14px;
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.sidebar nav a:hover {
-  background: #174d31;
-}
-.sidebar nav .active {
-  background: #087d16;
-  font-weight: bold;
-}
-.pending {
-  display: block;
-  color: #b7cbbe;
-}
-.pending small {
-  display: block;
-  font-size: 10px;
-  color: #a7bfb0;
-  margin-top: 4px;
-}
-.sidebar-footer {
-  margin-top: auto;
-  padding: 50px 0 0;
-  text-align: center;
-  color: #bdd7c4;
-  font-size: 11px;
-  line-height: 1.7;
-}
-.sidebar-footer > span {
-  display: block;
-  font-size: 64px;
-  color: #679e65;
-}
-.sidebar-footer strong {
-  color: white;
-  font-size: 18px;
-}
-.sidebar-footer a {
-  color: #d0e7d1;
-}
 .main-area {
   min-width: 0;
-}
-.topbar {
-  background: white;
-  padding: 20px 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  border-bottom: 1px solid var(--border);
-}
-h1 {
-  font-size: 22px;
-  margin: 6px 0;
-}
-.topbar p {
-  color: var(--muted);
-  font-size: 12px;
-  margin: 0;
 }
 .eyebrow {
   font-size: 10px;
   letter-spacing: 1.5px;
   font-weight: bold;
   color: #087d16;
-}
-.account {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  font-size: 13px;
-}
-.account small {
-  display: block;
-  font-size: 11px;
-  margin-top: 5px;
-  color: var(--muted);
 }
 main {
   padding: 20px 24px 12px;
@@ -138,7 +27,7 @@ select {
   border-radius: 8px;
   padding: 9px 12px;
   background: white;
-  min-height: 40px;
+  min-height: 44px;
 }
 button {
   cursor: pointer;
@@ -177,7 +66,8 @@ label {
   background: linear-gradient(115deg, #00351e, #195a31);
   color: white;
   padding: 26px 30px;
-  min-height: 200px;
+  min-height: 180px;
+  box-shadow: var(--shadow-card);
 }
 .hero .eyebrow {
   color: #d2e4b1;
@@ -191,11 +81,6 @@ label {
   font-size: 12px;
   color: #d9ead9;
   margin: 0;
-}
-.hero svg {
-  width: 230px;
-  max-height: 180px;
-  flex-shrink: 0;
 }
 .hero-note {
   border-left: 1px solid #8fac8d;
@@ -211,10 +96,19 @@ label {
   font-weight: normal;
   color: #c4d8c3;
 }
+.hero-note p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  color: white;
+  font-size: 13px;
+}
 .panel {
   background: white;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   padding: 20px;
   min-width: 0;
 }
@@ -274,12 +168,12 @@ label {
 }
 .readings-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 0.65fr;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr) minmax(150px, 0.55fr);
+  gap: var(--panel-gap);
   margin: 16px 0;
 }
 .panel h2 {
-  font-size: 17px;
+  font-size: 19px;
   margin: 0 0 18px;
 }
 .panel-title {
@@ -369,7 +263,7 @@ label {
 .middle-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: var(--panel-gap);
   margin-bottom: 14px;
 }
 .irrigation {
@@ -393,9 +287,14 @@ label {
   padding: 22px;
   align-items: center;
 }
-.irrigation-body > span {
-  font-size: 44px;
-  color: #087d16;
+.irrigation-body > app-icon {
+  font-size: 40px;
+  color: var(--green);
+  padding: 10px;
+  width: 64px;
+  height: 64px;
+  background: var(--green-soft);
+  border-radius: 16px;
 }
 .irrigation-body strong {
   font-size: 18px;
@@ -427,7 +326,8 @@ label {
 .bottom-grid {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
-  gap: 14px;
+  gap: var(--panel-gap);
+  align-items: start;
 }
 .range {
   display: flex;
@@ -473,15 +373,6 @@ label {
 .skip-link:focus {
   top: 12px;
 }
-@media (min-width: 901px) {
-  .sidebar {
-    position: sticky;
-    top: 0;
-    align-self: start;
-    height: 100dvh;
-    overflow-y: auto;
-  }
-}
 @media (min-width: 1600px) {
   .workspace {
     grid-template-columns: 260px minmax(0, 1fr);
@@ -490,12 +381,6 @@ label {
 @media (max-width: 1250px) {
   .workspace {
     grid-template-columns: 200px minmax(0, 1fr);
-  }
-  .sidebar {
-    padding: 24px 14px;
-  }
-  .brand {
-    font-size: 18px;
   }
   .hero-note {
     display: none;
@@ -537,39 +422,8 @@ label {
   .workspace {
     grid-template-columns: 1fr;
   }
-  .sidebar {
-    padding: 14px 20px;
-    display: block;
-  }
-  .brand-caption,
-  .sidebar-footer,
-  .pending {
-    display: none;
-  }
-  .sidebar nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    margin-top: 12px;
-    gap: 4px;
-  }
-  .sidebar nav a {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-  .brand {
-    font-size: 20px;
-  }
-  .brand > span {
-    font-size: 26px;
-  }
-  .topbar {
-    padding: 18px 20px;
-  }
   .middle-grid {
     grid-template-columns: 1fr;
-  }
-  .hero svg {
-    width: 180px;
   }
   .readings-grid {
     grid-template-columns: 1.4fr 1fr;
@@ -579,36 +433,12 @@ label {
   main {
     padding: 12px;
   }
-  .topbar {
-    align-items: start;
-    padding: 16px;
-    gap: 10px;
-  }
-  .topbar h1 {
-    font-size: 18px;
-  }
-  .account {
-    gap: 8px;
-    align-items: end;
-    flex-direction: column;
-    font-size: 11px;
-  }
-  .account small {
-    font-size: 10px;
-  }
   .hero {
     padding: 24px 20px;
     min-height: 180px;
   }
   .hero h2 {
     font-size: 25px;
-  }
-  .hero svg {
-    position: absolute;
-    right: -40px;
-    bottom: -24px;
-    width: 170px;
-    opacity: 0.25;
   }
   .hero > div {
     z-index: 1;

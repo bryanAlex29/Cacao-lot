@@ -1,7 +1,7 @@
 <main class="login-layout">
   <section class="identity" aria-label="CacaoSmart IoT">
     <span class="eyebrow">CACAO · TECNOLOGÍA · TERRITORIO</span>
-    <h1>CacaoSmart IoT</h1>
+    <h1><app-icon name="leaf" /> CacaoSmart IoT</h1>
     <p class="tagline">Tu cultivo merece<br />información a su alcance.</p>
     <p>
       Crea tu cuenta de agricultor para acceder a la plataforma. Solo podrás consultar los recursos
@@ -23,7 +23,9 @@
           maxlength="100"
           required
           [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid"
-          aria-describedby="name-help"
+          [attr.aria-describedby]="
+            form.controls.name.touched && form.controls.name.invalid ? 'name-help' : null
+          "
         />
         @if (form.controls.name.touched && form.controls.name.invalid) {
           <small id="name-help">Ingresa tu nombre, hasta 100 caracteres.</small>
@@ -37,7 +39,11 @@
           maxlength="254"
           required
           [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
-          aria-describedby="register-email-help"
+          [attr.aria-describedby]="
+            form.controls.email.touched && form.controls.email.invalid
+              ? 'register-email-help'
+              : null
+          "
         />
         @if (form.controls.email.touched && form.controls.email.invalid) {
           <small id="register-email-help">Ingresa un correo electrónico válido.</small>
@@ -75,7 +81,12 @@
             form.controls.confirmPassword.touched &&
             (form.controls.confirmPassword.invalid || form.hasError('passwordMismatch'))
           "
-          aria-describedby="confirm-help"
+          [attr.aria-describedby]="
+            form.controls.confirmPassword.touched &&
+            (form.controls.confirmPassword.invalid || form.hasError('passwordMismatch'))
+              ? 'confirm-help'
+              : null
+          "
         />
         @if (
           form.controls.confirmPassword.touched &&

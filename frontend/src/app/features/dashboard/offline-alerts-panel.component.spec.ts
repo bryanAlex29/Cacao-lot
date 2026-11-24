@@ -106,4 +106,19 @@ describe('Panel: condición y reconocimiento separados, sin alterar otras tarjet
     expect(element.textContent).toContain('Selecciona un dispositivo');
     expect(element.querySelector('button')).toBeNull();
   });
+  it('mantiene condición, fecha y reconocimiento fuera de los detalles; abrir evidencia no consulta ni reconoce', () => {
+    const { element, facade } = setup();
+    const evidence = element.querySelector<HTMLDetailsElement>('.alert-evidence')!;
+    expect(evidence.open).toBe(false);
+    expect(evidence.textContent).toContain('Último contacto');
+    const row = element.querySelector('li')!;
+    expect(row.querySelector('strong')?.closest('details')).toBeNull();
+    expect(row.querySelector('.alert-time')?.closest('details')).toBeNull();
+    expect(row.querySelector('button')?.closest('details')).toBeNull();
+    evidence.querySelector('summary')!.click();
+    expect(evidence.open).toBe(true);
+    expect(facade.reload).not.toHaveBeenCalled();
+    expect(facade.acknowledge).not.toHaveBeenCalled();
+    expect(element.textContent).toContain('Reconocer no significa recuperar el contacto');
+  });
 });
