@@ -16,13 +16,14 @@
       <span class="eyebrow">PREDICCIÓN HÍDRICA · PREPARACIÓN</span>
       <h1>Predicción hídrica</h1>
       <p class="notice">
-        <strong>Pronóstico no disponible · modelo no implementado.</strong> Esta pantalla comprueba
-        cobertura almacenada, no predice humedad ni calcula déficit, litros o fecha de riego. No
-        controla la válvula.
+        <strong>Pronóstico operativo no disponible · sin validación de campo.</strong> Puedes
+        consultar cobertura, persistencia y regresión experimental cuando exista un modelo propio
+        registrado. No calcula déficit, litros o fecha de riego y no controla la válvula.
       </p>
       <p>
-        Objetivo previsto: humedad del suelo (%) por zona, a 1 día. Todavía no hay modelo entrenado,
-        evaluación de error ni intervalos de incertidumbre.
+        Objetivo: humedad del suelo (%) por zona al cierre del día UTC. Entrenamiento offline y
+        consulta experimental en la web, sin modelo operativo validado ni intervalos de
+        incertidumbre.
       </p>
       <button type="button" (click)="loadDevices(offset())" [disabled]="busy()">
         Actualizar equipos
@@ -108,44 +109,46 @@
             }
             <div class="zones">
               @for (zone of data.zones; track zone.code) {
-                <article [attr.aria-labelledby]="zone.code + '-title'">
-                  <h3 [id]="zone.code + '-title'">{{ zoneNames[zone.code] }}</h3>
-                  <p>
-                    {{
-                      zone.sensorId === null
-                        ? 'Sensor no registrado'
-                        : !zone.enabled
-                          ? 'Sensor deshabilitado'
-                          : zone.validSamples === 0
-                            ? 'Sin muestras válidas en el periodo'
-                            : 'Hay observaciones; no acredita suficiencia'
-                    }}
-                  </p>
-                  <dl>
-                    <dt>Registros de la sonda</dt>
-                    <dd>{{ zone.samples }}</dd>
-                    <dt>Muestras válidas de entrada</dt>
-                    <dd>{{ zone.validSamples }}</dd>
-                    <dt>Días UTC con muestra válida</dt>
-                    <dd>{{ zone.validDaysUtc }} de 30</dd>
-                    <dt>Primera muestra válida</dt>
-                    <dd>
+                @if (zone.code === 'soil_1') {
+                  <article [attr.aria-labelledby]="zone.code + '-title'">
+                    <h3 [id]="zone.code + '-title'">{{ zoneNames[zone.code] }}</h3>
+                    <p>
                       {{
-                        zone.firstValidAt
-                          ? (zone.firstValidAt | date: 'dd/MM/yyyy HH:mm' : 'UTC') + ' UTC'
-                          : 'No disponible'
+                        zone.sensorId === null
+                          ? 'Sensor no registrado'
+                          : !zone.enabled
+                            ? 'Sensor deshabilitado'
+                            : zone.validSamples === 0
+                              ? 'Sin muestras válidas en el periodo'
+                              : 'Hay observaciones; no acredita suficiencia'
                       }}
-                    </dd>
-                    <dt>Última muestra válida</dt>
-                    <dd>
-                      {{
-                        zone.lastValidAt
-                          ? (zone.lastValidAt | date: 'dd/MM/yyyy HH:mm' : 'UTC') + ' UTC'
-                          : 'No disponible'
-                      }}
-                    </dd>
-                  </dl>
-                </article>
+                    </p>
+                    <dl>
+                      <dt>Registros de la sonda</dt>
+                      <dd>{{ zone.samples }}</dd>
+                      <dt>Muestras válidas de entrada</dt>
+                      <dd>{{ zone.validSamples }}</dd>
+                      <dt>Días UTC con muestra válida</dt>
+                      <dd>{{ zone.validDaysUtc }} de 30</dd>
+                      <dt>Primera muestra válida</dt>
+                      <dd>
+                        {{
+                          zone.firstValidAt
+                            ? (zone.firstValidAt | date: 'dd/MM/yyyy HH:mm' : 'UTC') + ' UTC'
+                            : 'No disponible'
+                        }}
+                      </dd>
+                      <dt>Última muestra válida</dt>
+                      <dd>
+                        {{
+                          zone.lastValidAt
+                            ? (zone.lastValidAt | date: 'dd/MM/yyyy HH:mm' : 'UTC') + ' UTC'
+                            : 'No disponible'
+                        }}
+                      </dd>
+                    </dl>
+                  </article>
+                }
               }
             </div>
             <p class="help">
@@ -155,6 +158,9 @@
             </p>
           </section>
         }
+        <app-regression-forecast [selection]="exportSelection()" />
+        <app-experimental-forecast [selection]="exportSelection()" />
+        <app-offline-export [selection]="exportSelection()" />
       }
       <section class="panel" aria-labelledby="next-title">
         <h2 id="next-title">Qué falta para ofrecer un pronóstico</h2>
@@ -163,8 +169,8 @@
             Definir datos y variables de entrenamiento con calibración y procedencia verificadas.
           </li>
           <li>
-            Implementar regresión múltiple y comparar con persistencia y un balance hídrico con
-            parámetros justificados.
+            Evaluar la regresión múltiple offline frente a persistencia con datos de campo y
+            desarrollar un balance hídrico con parámetros justificados.
           </li>
           <li>
             Evaluar por fechas y horizonte, sin información futura; publicar métricas y límites

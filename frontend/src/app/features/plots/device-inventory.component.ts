@@ -1,4 +1,13 @@
-import { Component, DestroyRef, effect, inject, input, signal, untracked } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Subscription } from 'rxjs';
@@ -22,7 +31,7 @@ import {
       <h4 [id]="'inventory-title-' + plotId()">
         <app-icon name="monitor" /> Dispositivos y sensores
       </h4>
-      <button type="button" (click)="load(offset())" [disabled]="busy()">
+      <button type="button" (click)="load(offset())" [disabled]="busy() || management()?.busy()">
         Actualizar dispositivos
       </button>
     </div>
@@ -128,7 +137,13 @@ import {
       </div>
     }
     @if (canManage()) {
-      <app-device-management [plotId]="plotId()" [devices]="devices()" (changed)="load(offset())" />
+      <app-device-management
+        [plotId]="plotId()"
+        [devices]="devices()"
+        [inventoryRevision]="revision()"
+        [inventoryBusy]="busy()"
+        (changed)="load(offset())"
+      />
     }
     <p>
       Habilitado no significa conectado. El inventario no acredita instalación física, calibración
@@ -148,6 +163,8 @@ export class DeviceInventoryComponent {
   readonly busy = signal(false);
   readonly error = signal('');
   readonly checkedAt = signal<string | null>(null);
+  readonly revision = signal(0);
+  readonly management = viewChild(DeviceManagementComponent);
 
   constructor() {
     effect(() => {
@@ -162,6 +179,7 @@ export class DeviceInventoryComponent {
   }
   load(offset: number, plotId = this.plotId()): void {
     if (!plotId || !Number.isInteger(offset) || offset < 0) return;
+    if (this.management()?.plotId() === plotId && this.management()?.busy()) return;
     this.request.unsubscribe();
     this.devices.set([]);
     this.checkedAt.set(null);
@@ -175,6 +193,7 @@ export class DeviceInventoryComponent {
         this.offset.set(page.offset);
         this.busy.set(false);
         this.checkedAt.set(new Date().toISOString());
+        this.revision.update((value) => value + 1);
       },
       error: (error: unknown) => {
         this.total.set(0);

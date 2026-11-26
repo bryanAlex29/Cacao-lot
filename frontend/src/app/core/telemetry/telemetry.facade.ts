@@ -50,7 +50,8 @@ export class TelemetryFacade {
     return (
       !reading ||
       !snapshot?.device ||
-      this.now() - Date.parse(reading.recordedAt ?? reading.receivedAt) >
+      this.now() -
+        Date.parse(reading.providerObservedAt ?? reading.recordedAt ?? reading.receivedAt) >
         snapshot.device.expectedIntervalSeconds * 2000
     );
   });

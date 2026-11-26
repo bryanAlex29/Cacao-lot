@@ -58,6 +58,24 @@ describe('JWT en memoria, renovación de sesión e interceptor', () => {
     expect(auth.accessToken()).toBeNull();
     expect(auth.user()).toBeNull();
   });
+  it.each(['login', 'register'] as const)(
+    '%s termina por timeout sin reenvío ni sesión inventada',
+    (kind) => {
+      vi.useFakeTimers();
+      const failed = vi.fn();
+      const request =
+        kind === 'login'
+          ? auth.login('test@example.test', 'a-test-password')
+          : auth.register({ name: 'Usuario', email: 'test@example.test', password: 'Abcdefg!' });
+      request.subscribe({ error: failed });
+      const pending = http.expectOne('/api/v1/auth/' + kind);
+      vi.advanceTimersByTime(15001);
+      expect(pending.cancelled).toBe(true);
+      expect(failed).toHaveBeenCalledOnce();
+      expect(auth.user()).toBeNull();
+      http.expectNone('/api/v1/auth/' + kind);
+    },
+  );
 
   it('una cookie caducada rechaza renovación y limpia la sesión sin enviar JWT vencido', () => {
     vi.useFakeTimers();

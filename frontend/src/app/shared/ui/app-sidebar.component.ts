@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, ElementRef, input, output, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent, IconName } from './icon.component';
 
@@ -9,13 +9,14 @@ export type DashboardSection = 'readings' | 'history' | 'irrigation-history' | '
   standalone: true,
   imports: [RouterLink, IconComponent],
   template: `
-    <aside class="sidebar">
+    <aside class="sidebar" (keydown.escape)="dismissMenu($event)">
       <a class="brand" routerLink="/parcelas" aria-label="CacaoSmart IoT · Mis parcelas">
         <span class="brand-mark"><app-icon name="leaf" /></span>
         <strong>CacaoSmart <small>IoT</small></strong>
       </a>
       <p class="brand-caption">Riego inteligente para<br />cultivos de cacao</p>
       <button
+        #menuToggle
         class="menu-toggle"
         type="button"
         [attr.aria-expanded]="expanded()"
@@ -24,7 +25,12 @@ export type DashboardSection = 'readings' | 'history' | 'irrigation-history' | '
       >
         <app-icon name="menu" /> Menú
       </button>
-      <nav id="main-navigation" aria-label="Navegación principal" [class.expanded]="expanded()">
+      <nav
+        id="main-navigation"
+        aria-label="Navegación principal"
+        [class.expanded]="expanded()"
+        (click)="closeOnNavigation($event)"
+      >
         @if (plotId()) {
           <a
             [routerLink]="dashboardRoute()"
@@ -114,6 +120,7 @@ export class AppSidebarComponent {
   readonly plotId = input<string | null>(null);
   readonly active = input<'dashboard' | 'plots' | 'diagnosis' | 'weather' | 'prediction'>('plots');
   readonly expanded = signal(false);
+  private readonly menuToggle = viewChild<ElementRef<HTMLButtonElement>>('menuToggle');
   readonly sectionSelected = output<DashboardSection>();
   readonly sections: { fragment: DashboardSection; label: string; icon: IconName }[] = [
     { fragment: 'history', label: 'Historial', icon: 'history' },
@@ -130,5 +137,15 @@ export class AppSidebarComponent {
   selectSection(section: DashboardSection): void {
     this.expanded.set(false);
     this.sectionSelected.emit(section);
+  }
+  dismissMenu(event: Event): void {
+    if (!this.expanded()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.expanded.set(false);
+    this.menuToggle()?.nativeElement.focus();
+  }
+  closeOnNavigation(event: Event): void {
+    if (event.target instanceof Element && event.target.closest('a')) this.expanded.set(false);
   }
 }

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PlotManagementComponent } from './plot-management.component';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -56,7 +56,7 @@ describe('Edición y archivo de parcelas propias', () => {
       locationLabel: 'Manabí',
       areaM2: null,
     });
-    req.flush({});
+    req.flush({ ...plot, name: 'Cacao nuevo', locationLabel: 'Manabí', areaM2: null });
     expect(component.editing()).toBe(false);
   });
   it.each([{ name: ' ' }, { areaM2: -1 }, { areaM2: Infinity }, { locationLabel: '' }])(
@@ -156,6 +156,23 @@ describe('Edición y archivo de parcelas propias', () => {
     fixture.detectChanges();
     expect(component.uncertain()).toBe(false);
   });
+  it.each([{}, null, { ...plot, id: 'foreign' }])(
+    'PATCH incompatible %j no confirma guardado ni permite otro envío',
+    async (body) => {
+      const { component, http } = await setup();
+      component.editing.set(true);
+      component.form.controls.name.setValue('Borrador');
+      const changed = vi.fn();
+      component.changed.subscribe(changed);
+      component.save();
+      http.expectOne('/api/v1/plots/plot').flush(body);
+      expect(component.uncertain()).toBe(true);
+      expect(component.form.controls.name.value).toBe('Borrador');
+      expect(changed).not.toHaveBeenCalled();
+      component.save();
+      http.expectNone(() => true);
+    },
+  );
   it('cambio de parcela cancela operación anterior y limpia confirmación', async () => {
     const { fixture, component, http } = await setup();
     component.editing.set(true);

@@ -20,6 +20,7 @@ import { ReportsModule } from './reports/reports.module';
 import { DiagnosisModule } from './ai-diagnostics/diagnosis.module';
 import { WeatherModule } from './weather/weather.module';
 import { PredictionModule } from './prediction/prediction.module';
+import { ThingSpeakImportModule } from './integrations/thingspeak-import.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { PredictionModule } from './prediction/prediction.module';
     DiagnosisModule,
     WeatherModule,
     PredictionModule,
+    ThingSpeakImportModule,
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
   ],
   providers: [

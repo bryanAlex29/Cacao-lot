@@ -13,6 +13,7 @@ import {
   irrigationObservation,
   valveObservationSelect,
 } from '../irrigation/irrigation-observation';
+import type { ExternalObservation } from './external-observation';
 
 const latestOrder = [
   { effectiveAt: 'desc' },
@@ -24,7 +25,12 @@ const latestOrder = [
 export class TelemetryRepository {
   constructor(private readonly database: PrismaService) {}
 
-  async ingest(auth: AuthenticatedDevice, input: IotTelemetryPayload, payloadHash: string) {
+  async ingest(
+    auth: AuthenticatedDevice,
+    input: IotTelemetryPayload,
+    payloadHash: string,
+    external?: ExternalObservation,
+  ) {
     return this.database.$transaction(async (tx) => {
       // Serializa reintentos concurrentes y cambios de credencial/actividad del dispositivo.
       await tx.$queryRaw`SELECT id FROM devices WHERE id = ${auth.id}::uuid FOR UPDATE`;
@@ -36,7 +42,11 @@ export class TelemetryRepository {
           plotId: true,
           source: true,
           credentialHash: true,
-          plot: { select: { archivedAt: true, owner: { select: { isActive: true } } } },
+          serial: true,
+          lastSeenAt: true,
+          plot: {
+            select: { ownerId: true, archivedAt: true, owner: { select: { isActive: true } } },
+          },
         },
       });
       if (
@@ -45,7 +55,10 @@ export class TelemetryRepository {
         device.source !== auth.source ||
         device.credentialHash !== auth.credentialHash ||
         device.plot.archivedAt ||
-        !device.plot.owner.isActive
+        !device.plot.owner.isActive ||
+        (external &&
+          (device.plot.ownerId !== external.ownerId ||
+            device.serial !== `thingspeak-${external.channelId}`))
       )
         throw new UnauthorizedException('Credencial de dispositivo inválida');
       const existing = await tx.reading.findUnique({
@@ -67,6 +80,26 @@ export class TelemetryRepository {
         receivedAt,
         device.source,
       );
+      if (external) {
+        // Solo la calidad del mapa interno, sin reactivar sensores deshabilitados.
+        for (const key of Object.keys(reading.quality) as (keyof typeof reading.quality)[]) {
+          const value =
+            key === 'soil_1' || key === 'soil_2' || key === 'soil_3'
+              ? reading.soilMoisture[key]
+              : key === 'relayCommandedOpen' || key === 'feedbackOpen'
+                ? reading.valve[key]
+                : reading[key];
+          reading.quality[key] =
+            value === null
+              ? external.quality[key] === 'invalid'
+                ? 'invalid'
+                : 'missing'
+              : external.quality[key];
+        }
+      }
+      const effectiveAt = external
+        ? new Date(external.providerObservedAt)
+        : (reading.recordedAt ?? receivedAt);
       const previous = await tx.reading.findFirst({
         where: { deviceId: auth.id, source: device.source },
         orderBy: latestOrder,
@@ -79,7 +112,7 @@ export class TelemetryRepository {
           payloadHash,
           recordedAt: reading.recordedAt,
           receivedAt,
-          effectiveAt: reading.recordedAt ?? receivedAt,
+          effectiveAt,
           timestampOrigin: reading.timestampOrigin,
           source: device.source,
           temperatureC: reading.temperatureC,
@@ -102,11 +135,20 @@ export class TelemetryRepository {
         },
         include: readingInclude,
       });
-      await tx.device.update({ where: { id: auth.id }, data: { lastSeenAt: receivedAt } });
+      const contact = external ? new Date(external.providerObservedAt) : receivedAt;
+      await tx.device.update({
+        where: { id: auth.id },
+        data: {
+          lastSeenAt:
+            external && device.lastSeenAt && device.lastSeenAt > contact
+              ? device.lastSeenAt
+              : contact,
+        },
+      });
       return {
         duplicate: false,
         reading: toReading(stored),
-        irrigationUpdate: irrigationObservation(auth.plotId, stored, previous),
+        irrigationUpdate: external ? null : irrigationObservation(auth.plotId, stored, previous),
       };
     });
   }

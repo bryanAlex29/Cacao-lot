@@ -78,6 +78,8 @@ export interface TelemetryReading {
   deviceId: string;
   recordedAt: string | null;
   receivedAt: string;
+  /** Recepción por ThingSpeak; no hora de medición del ESP32. Solo adaptador interno. */
+  providerObservedAt?: string;
   timestampOrigin: 'device' | 'server';
   source: DataSource;
   soilMoisture: SoilMoistureMap;
@@ -334,4 +336,135 @@ export interface PredictionAvailability {
   waterDemand: null;
   device: { id: string; serial: string; isActive: boolean } | null;
   zones: PredictionZoneCoverage[];
+}
+
+/** Unfitted reference forecast, not an operational irrigation recommendation. */
+export interface ExperimentalMoistureForecast {
+  schemaVersion: 'persistence-forecast-v1';
+  plotId: string;
+  deviceId: string;
+  source: DataSource;
+  generatedAt: string;
+  informationCutoff: string;
+  target: {
+    from: string;
+    toExclusive: string;
+    timezone: 'UTC';
+    variable: 'soil_moisture';
+    unit: '%';
+    horizonDays: 1;
+  };
+  model: { name: 'persistence'; version: '1.0.0'; fitted: false; fieldValidated: false };
+  status: 'experimental' | 'unavailable';
+  uncertainty: 'not_calibrated';
+  waterDemand: null;
+  zones: ExperimentalForecastZone[];
+}
+export interface ExperimentalForecastZone {
+  code: SoilSensorId;
+  sensorId: string | null;
+  reason:
+    | 'available'
+    | 'sensor_missing'
+    | 'sensor_disabled'
+    | 'device_disabled'
+    | 'missing_previous_day'
+    | 'unusable_previous_day';
+  predictedPct: number | null;
+  evidence: { observedAt: string; receivedAt: string } | null;
+  evaluation: {
+    from: string;
+    toExclusive: string;
+    samples: number;
+    maePp: number | null;
+    rmsePp: number | null;
+    biasPp: number | null;
+  };
+  history: { day: string; observedPct: number | null; predictedPct: number | null }[];
+}
+
+export interface RegressionScoreSummary {
+  samples: number;
+  maePp: number;
+  rmsePp: number;
+  biasPp: number;
+  outOfRangePredictions: number;
+}
+export interface RegressionForecast {
+  schemaVersion: 'regression-forecast-v1';
+  plotId: string;
+  deviceId: string;
+  source: DataSource;
+  generatedAt: string;
+  informationCutoff: string;
+  target: ExperimentalMoistureForecast['target'];
+  status: 'experimental' | 'unavailable';
+  fieldValidated: false;
+  uncertainty: 'not_calibrated';
+  waterDemand: null;
+  zones: RegressionForecastZone[];
+}
+export interface RegressionForecastZone {
+  code: SoilSensorId;
+  sensorId: string | null;
+  reason:
+    | 'available'
+    | 'sensor_missing'
+    | 'sensor_disabled'
+    | 'device_disabled'
+    | 'model_not_registered'
+    | 'model_not_available_at_cutoff'
+    | 'model_incompatible'
+    | 'missing_features'
+    | 'unusable_features'
+    | 'output_out_of_range';
+  predictedPct: number | null;
+  persistencePct: number | null;
+  features: { lag: 1 | 2; moisturePct: number; observedAt: string; receivedAt: string }[] | null;
+  model: {
+    id: string;
+    version: 'linear-two-lag-1.0.0';
+    registeredAt: string;
+    trainedUntilExclusive: string;
+    evaluatedThrough: string;
+    trainSamples: number;
+    evaluation: {
+      validation: { regression: RegressionScoreSummary; persistence: RegressionScoreSummary };
+      test: { regression: RegressionScoreSummary; persistence: RegressionScoreSummary };
+    };
+  } | null;
+}
+/** Current modeled conditions, independent of ESP32 telemetry and historical ERA5. */
+export interface CurrentWeather {
+  plotId: string;
+  /** City explicitly chosen for reference; never rewrites the plot profile. */
+  city?: WeatherCity;
+  status: 'available' | 'disabled' | 'location_required';
+  current: {
+    observedAt: string;
+    fetchedAt: string;
+    temperatureC: number | null;
+    apparentTemperatureC: number | null;
+    humidityPct: number | null;
+    precipitationMm: number | null;
+    intervalSeconds: number;
+    weatherCode: number | null;
+    isDay: boolean | null;
+    provider: 'Open-Meteo';
+    quality: 'modeled';
+  } | null;
+}
+
+export interface WeatherCity {
+  id: number;
+  name: string;
+  region: string | null;
+  country: string;
+  countryCode: string;
+}
+
+export interface WeatherCitySearch {
+  plotId: string;
+  status: 'available' | 'disabled';
+  items: WeatherCity[];
 }

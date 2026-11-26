@@ -14,7 +14,8 @@ import {
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Subscription, timeout } from 'rxjs';
+import { map, Subscription, timeout } from 'rxjs';
+import { checkedPlot } from '../../core/plots/plot-response';
 import type { PlotSummary } from '@cacaosmart/contracts';
 import { AuthService } from '../../core/auth/auth.service';
 import { IconComponent } from '../../shared/ui/icon.component';
@@ -57,7 +58,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
             (ngSubmit)="save()"
             [attr.aria-describedby]="'edit-note-' + plot().id"
           >
-            <div class="fields">
+            <fieldset class="fields" [disabled]="busy()" aria-label="Datos de la parcela">
               <label
                 >Nombre de la parcela<input
                   #editName
@@ -83,7 +84,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
                   [attr.aria-invalid]="form.controls.areaM2.touched && form.controls.areaM2.invalid"
                 />
               </label>
-            </div>
+            </fieldset>
             @if (form.touched && form.invalid) {
               <p role="alert">Nombre y ubicación obligatorios; superficie positiva o vacía.</p>
             }
@@ -114,6 +115,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
               <input
                 #archiveInput
                 [formControl]="archiveName"
+                [readOnly]="busy()"
                 autocomplete="off"
                 [attr.aria-invalid]="archiveName.touched && archiveName.value !== plot().name"
               />
@@ -251,7 +253,10 @@ export class PlotManagementComponent {
         name: value.name.trim(),
         locationLabel: value.locationLabel.trim(),
       })
-      .pipe(timeout(15000))
+      .pipe(
+        timeout(15000),
+        map((response) => checkedPlot(response, this.plot().id)),
+      )
       .subscribe({
         next: () => {
           this.busy.set(false);

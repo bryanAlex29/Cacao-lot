@@ -1,0 +1,146 @@
+:host {
+  display: block;
+  min-width: 0;
+  height: 100%;
+}
+.city-search {
+  margin-top: 12px;
+}
+.city-search label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.city-search input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  margin: 6px 0;
+  padding: 10px;
+  min-height: 44px;
+  border: 1px solid #9ebed1;
+  border-radius: 8px;
+  background: white;
+  color: #194661;
+  font: inherit;
+}
+.city-search input:focus-visible {
+  outline: 3px solid #1263bd;
+  outline-offset: 2px;
+}
+.city-results {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+.city-results li {
+  margin-top: 6px;
+}
+.city-results button {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.choose-city,
+.use-plot {
+  margin-bottom: 8px;
+}
+.weather-card {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 18px;
+  border: 1px solid #cbdfe9;
+  border-radius: var(--radius-card, 18px);
+  background: linear-gradient(150deg, #eaf6ff, #fff 80%);
+  color: #194661;
+  overflow-wrap: anywhere;
+}
+h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #153b50;
+}
+p {
+  margin: 8px 0;
+}
+.location,
+.note,
+.source {
+  font-size: 11px;
+  line-height: 1.6;
+}
+.location {
+  color: #486274;
+}
+.conditions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.weather-icon {
+  font-size: 38px;
+}
+.temperature {
+  font-size: 30px;
+  font-weight: 700;
+}
+.condition {
+  text-align: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+dl {
+  font-size: 12px;
+  margin: 14px 0;
+}
+dl div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #d8e7ef;
+}
+dd {
+  margin: 0;
+  font-weight: 600;
+}
+.note,
+.source {
+  color: #486274;
+}
+.source {
+  border-top: 1px solid #d8e7ef;
+  padding-top: 8px;
+}
+.state {
+  font-size: 13px;
+  line-height: 1.6;
+}
+button {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #9ebed1;
+  border-radius: 10px;
+  background: white;
+  color: #194661;
+  padding: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+a {
+  color: #15567c;
+  font-size: 12px;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #1263bd;
+  outline-offset: 3px;
+}

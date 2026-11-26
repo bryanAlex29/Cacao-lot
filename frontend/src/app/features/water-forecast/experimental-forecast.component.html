@@ -1,0 +1,167 @@
+<section class="forecast panel" aria-labelledby="experimental-title" [attr.aria-busy]="busy()">
+  <span class="eyebrow">REFERENCIA EXPERIMENTAL · SIN CONTROL DEL RIEGO</span>
+  <h2 id="experimental-title">Referencia de humedad para un día UTC</h2>
+  <p>
+    Persistencia: supone que la humedad al cierre del día UTC en curso será igual al último valor
+    utilizable del día anterior, conocido a medianoche UTC. No es una regresión ni un balance
+    hídrico, ni equivale a predecir exactamente las próximas 24 horas.
+  </p>
+  <button type="button" (click)="load()" [disabled]="!selection() || busy()">
+    {{ busy() ? 'Consultando referencia…' : 'Consultar referencia experimental' }}
+  </button>
+  @if (!selection()) {
+    <p>Selecciona un equipo y consulta su cobertura para continuar.</p>
+  }
+  @if (error()) {
+    <p role="alert">{{ error() }}</p>
+  }
+  @if (data(); as snapshot) {
+    <p class="notice" [class.demo]="snapshot.source === 'demo'">
+      <strong>{{
+        snapshot.source === 'demo' ? 'DEMO · Datos simulados' : 'REAL · Datos almacenados'
+      }}</strong>. Modelo de referencia {{ snapshot.model.version }} · sin entrenamiento, sin
+      validación de campo y sin incertidumbre calibrada. No se calcula precisión porcentual.
+    </p>
+    <p>
+      Objetivo: cierre del {{ snapshot.target.from | date: 'dd/MM/yyyy' : 'UTC' }} UTC (hasta antes
+      de {{ snapshot.target.toExclusive | date: 'dd/MM/yyyy HH:mm' : 'UTC' }} UTC). Corte de
+      información: {{ snapshot.informationCutoff | date: 'dd/MM/yyyy HH:mm' : 'UTC' }} UTC.
+      Calculado: {{ snapshot.generatedAt | date: 'dd/MM/yyyy HH:mm:ss' : 'UTC' }} UTC.
+    </p>
+    <div class="forecast-grid">
+      @for (zone of snapshot.zones; track zone.code) {
+        @if (zone.code === 'soil_1') {
+          <section class="zone" [attr.aria-labelledby]="'forecast-' + zone.code">
+            <h3 [id]="'forecast-' + zone.code">{{ names[zone.code] }}</h3>
+            <p class="value">
+              {{
+                zone.predictedPct === null
+                  ? 'No disponible'
+                  : (zone.predictedPct | number: '1.0-2') + ' %'
+              }}
+            </p>
+            <p>{{ reasons[zone.reason] }}</p>
+            @if (zone.evidence; as evidence) {
+              <p>
+                Lectura usada: {{ evidence.observedAt | date: 'dd/MM/yyyy HH:mm:ss' : 'UTC' }} UTC.
+                Recibida: {{ evidence.receivedAt | date: 'dd/MM/yyyy HH:mm:ss' : 'UTC' }} UTC.
+              </p>
+            }
+            <svg
+              viewBox="0 0 360 140"
+              role="img"
+              [attr.aria-label]="
+                names[zone.code] +
+                ': humedad observada azul continua y referencia verde discontinua; detalle en tabla'
+              "
+            >
+              <line x1="25" y1="15" x2="333" y2="15" class="grid" />
+              <line x1="25" y1="115" x2="333" y2="115" class="grid" />
+              <text x="0" y="18">100</text>
+              <text x="10" y="118">0</text>
+              <path [attr.d]="path(zone, 'observedPct')" class="observed" />
+              <path [attr.d]="path(zone, 'predictedPct')" class="predicted" />
+              @for (point of points(zone); track point.day; let i = $index) {
+                @if (point.observedPct !== null) {
+                  <circle
+                    [attr.cx]="x(i)"
+                    [attr.cy]="y(point.observedPct)"
+                    r="3"
+                    class="observed-dot"
+                  />
+                }
+                @if (point.predictedPct !== null) {
+                  <circle
+                    [attr.cx]="x(i)"
+                    [attr.cy]="y(point.predictedPct)"
+                    r="3"
+                    class="predicted-dot"
+                  />
+                }
+              }
+            </svg>
+            <p class="legend">
+              Azul continuo: observado. Verde discontinuo: referencia. Huecos: sin dato utilizable.
+            </p>
+            <details>
+              <summary>Ver tabla de los últimos 7 días y objetivo</summary>
+              <div class="table-scroll">
+                <table>
+                  <caption>
+                    {{
+                      names[zone.code]
+                    }}
+                    · humedad (%) por día UTC
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>Día UTC</th>
+                      <th>Observado</th>
+                      <th>Referencia</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (point of points(zone); track point.day) {
+                      <tr>
+                        <th scope="row">{{ point.day | date: 'dd/MM/yyyy' : 'UTC' }}</th>
+                        <td>
+                          {{
+                            point.observedPct === null
+                              ? 'Sin dato'
+                              : (point.observedPct | number: '1.0-2')
+                          }}
+                        </td>
+                        <td>
+                          {{
+                            point.predictedPct === null
+                              ? 'Sin dato'
+                              : (point.predictedPct | number: '1.0-2')
+                          }}
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </details>
+            <h4>Evaluación retrospectiva · 30 días completos UTC</h4>
+            <p>
+              Comparaciones utilizables: {{ zone.evaluation.samples }}. No es una evaluación
+              independiente de un modelo entrenado ni acredita suficiencia agronómica.
+            </p>
+            <dl>
+              <dt>MAE (puntos porcentuales)</dt>
+              <dd>
+                {{
+                  zone.evaluation.maePp === null
+                    ? 'No evaluable'
+                    : (zone.evaluation.maePp | number: '1.0-2')
+                }}
+              </dd>
+              <dt>RMSE (puntos porcentuales)</dt>
+              <dd>
+                {{
+                  zone.evaluation.rmsePp === null
+                    ? 'No evaluable'
+                    : (zone.evaluation.rmsePp | number: '1.0-2')
+                }}
+              </dd>
+              <dt>Sesgo: referencia − observado (pp)</dt>
+              <dd>
+                {{
+                  zone.evaluation.biasPp === null
+                    ? 'No evaluable'
+                    : (zone.evaluation.biasPp | number: '1.0-2')
+                }}
+              </dd>
+            </dl>
+          </section>
+        }
+      }
+    </div>
+    <p class="help">
+      No interpreta lluvia binaria como milímetros, no estima déficit, litros, ahorro ni fecha de
+      próximo riego. No usa clima externo ni OpenAI y nunca controla la válvula.
+    </p>
+  }
+</section>

@@ -70,6 +70,11 @@ export function toReading(row: StoredReading): TelemetryReading {
     deviceId: row.deviceId,
     recordedAt: row.recordedAt?.toISOString() ?? null,
     receivedAt: row.receivedAt.toISOString(),
+    ...(row.timestampOrigin === 'server' &&
+    row.recordedAt === null &&
+    /^thingspeak:3554501:[1-9]\d*$/.test(row.eventId)
+      ? { providerObservedAt: row.effectiveAt.toISOString() }
+      : {}),
     timestampOrigin: row.timestampOrigin === 'device' ? 'device' : 'server',
     source: row.source,
     soilMoisture,

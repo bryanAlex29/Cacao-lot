@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.2",
+  "eventId": "demo-contract-example:1",
+  "deviceId": "00000000-0000-4000-8000-000000000001",
+  "recordedAt": null,
+  "soilMoisture": {
+    "soil_1": 42,
+    "soil_2": 28,
+    "soil_3": 55
+  },
+  "temperatureC": 28.4,
+  "airHumidityPct": 76,
+  "rainDetected": false,
+  "valve": {
+    "relayCommandedOpen": false,
+    "feedbackOpen": null
+  },
+  "source": "demo"
+}

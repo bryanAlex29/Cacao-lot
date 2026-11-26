@@ -2,6 +2,11 @@
 
 Monitoreo y riego inteligente para cacao en Chone, Manabí, Ecuador. Proyecto TerriTech Hackathon CITIC 2026.
 
+**Presentación vigente:** renovación gráfica y solo **sensor de suelo 1** visible,
+por indicación del usuario. Backend, contratos y datos anteriores permanecen intactos.
+Los apartados de tres zonas inferiores conservan el alcance/evolución originales.
+Ver [cambios visuales y verificación](docs/visual-refresh-single-sensor.md).
+
 **Traspaso a Bryan:** [avance y guía de pruebas iniciales](docs/ENTREGA_BRYAN.md),
 [prompt de continuidad](docs/PROMPT_BRYAN.md) y Word
 `CacaoSmart_Avance_y_Traspaso_Bryan.docx` en la raíz. La guía incluye IA/clima y
@@ -10,6 +15,20 @@ Primero descargar el commit completo de entrega, probar y reportar; no comenzar
 funciones nuevas ni asumir que los cambios locales ya están en GitHub.
 
 ## Estado actual: fase 6.3 (comparación privada de fotografías)
+
+**Regresión múltiple · integración web experimental:** consulta por sonda de
+modelos previamente entrenados/evaluados offline, registro privado versionado y
+comparación con persistencia. No entrena al abrir la web ni inventa resultados
+si falta modelo o datos. Migración aditiva aplicada con respaldo verificado y
+datos anteriores intactos; ningún modelo sintético registrado en tu cuenta.
+Ver [uso, registro y límites](docs/prediction-web-regression.md).
+
+**Predicción hídrica · primera entrega web experimental:** seleccionar un equipo y
+pulsar **Consultar referencia experimental** para ver persistencia de humedad por
+A/B/C, gráfico/tabla y errores retrospectivos. Sin datos utilizables muestra el
+motivo, no valores ficticios. No es una regresión operativa, un balance hídrico ni
+una recomendación de riego. Sin migraciones ni dependencias nuevas. Ver
+[alcance, uso y cierre](docs/prediction-web-reference.md).
 
 **Nuevo:** selecciona dos fotos en **Diagnóstico IA · DEMO → Historial privado → Añadir a comparación**. Fotografías, fechas y resultados existentes lado a lado, intercambio A/B y limpieza; apiladas en móvil. Comparación manual, sin afirmar mejoría ni identificar plantas automáticamente. Sin nuevo análisis, migración o dependencia. **OpenAI continúa en espera.** Ver [guía y revisión manual](docs/phase-6-3.md).
 
@@ -53,9 +72,30 @@ Fase 5: **rangos min/max por UUID de sensor**, con permisos por propietario, aud
 - Tipos compartidos de telemetría y puertos para desacoplar fuentes demo/reales.
 - Pruebas de configuración, salud HTTP y presentación de disponibilidad.
 
-Hay un flujo fotográfico privado con proveedor IA **simulado**; no hay análisis OpenAI real, predicción ni control remoto de válvula. La telemetría está probada con simulador, **no con ESP32 real**. Alta/habilitación visual de dispositivos para ADMIN propietario disponible; asignación entre cuentas, rotación de claves y administración avanzada pendientes. No desplegar esta base como producto terminado.
+Hay un flujo fotográfico privado con proveedor IA **simulado**; no hay análisis OpenAI real, predicción hídrica validada ni control remoto de válvula. Las referencias de humedad son experimentales. La telemetría está probada con simulador, **no con ESP32 real**. Alta/habilitación visual de dispositivos para ADMIN propietario disponible; asignación entre cuentas, rotación de claves y administración avanzada pendientes. No desplegar esta base como producto terminado.
 
 ## Especificaciones
+
+- [Guía de presentación estudiantil](docs/GUIA_PRESENTACION.md): guion de siete
+  minutos, recorrido, preguntas y alternativa si falla internet.
+
+- [Simulaciones sintéticas y pruebas aisladas](docs/synthetic-simulations.md):
+  `simulation:preview` muestra escenarios ficticios offline, sin tocar la cuenta,
+  hardware ni OpenAI. Pruebas por contrato e integración temporal separadas.
+
+- [Preparación operativa: salud, HTTPS, respaldo y recuperación](docs/operations.md).
+  Herramientas `ops:check`, `ops:health` y `ops:backup`; plantillas sin activar,
+  sin despliegue ni conexión OpenAI.
+
+- [Preparación para conectar el ESP32 sin modificar firmware](docs/ESP32_PREPARACION.md)
+  y [ficha de integración pendiente](docs/ESP32_FICHA_INTEGRACION.md).
+  `npm run iot:check -- --demo` comprueba el JSON offline, sin enviar lecturas
+  ni necesitar credenciales. La red y provisión REAL requieren revisión aparte.
+
+- [Exportación autenticada de lecturas de suelo para evaluación offline](docs/prediction-offline-export.md):
+  descarga JSON por parcela propia, dispositivo y origen, sin entrenamiento HTTP
+  ni pronósticos operativos. Disponible en **Predicción hídrica → Exportar para
+  evaluación offline**; [guía del formulario](docs/prediction-offline-export-ui.md).
 
 - [Resumen de entrega y guía para que el compañero continúe](docs/CONTINUAR.md).
 
@@ -103,6 +143,17 @@ DERCAS es la fuente de verdad funcional. La referencia visual orienta la interfa
 Las dependencias resueltas se conservan en `package-lock.json`. Usar la versión de npm indicada para instalar: npm 10.9.3 y 10.9.4 fallaron al resolver dependencias opcionales del árbol de Vitest con `Cannot read properties of null (reading 'edgesOut')`. No se cambió la instalación global de Node.js ni npm.
 
 ## Arranque local
+
+**Presentación estudiantil en este PC:** [guía breve local](docs/LOCAL.md).
+`npm.cmd run local:start` inicia API y Angular si ambos puertos están libres;
+`local:check` revisa configuración y `local:health` comprueba API/base.
+No cambia `.env` ni Neon, no inicia respaldos/simulador ni conecta OpenAI.
+
+**Si el `.env` ya apunta a Neon:** iniciar únicamente API y Angular; no hace falta
+Docker ni `db:up`. Para respaldar y ensayar recuperación sin tocar la principal,
+usar `npm.cmd run backup:neon`. Ver [Neon: arranque, respaldo y pruebas
+aisladas](docs/neon-backup-and-validation.md). Los pasos Docker siguientes siguen
+siendo válidos solo para la configuración PostgreSQL local anterior.
 
 Ejecutar desde la raíz del proyecto, con Docker activo:
 
@@ -199,6 +250,30 @@ La tabla de endpoints, paginación y manejo de claves de dispositivo está en [f
 
 ## Telemetría y simulación local
 
+**ThingSpeak REAL:** cliente e importador local del canal confirmado, con mapa
+field1 temperatura / field2 humedad ambiental / field3 suelo A / field4 relé
+(1 activo, 0 apagado; no confirma apertura física). Consulta cada
+20 s cuando se habilita explícitamente; B/C sin datos, deduplicación por entry_id,
+fecha del proveedor separada de recepción en NestJS. No descarga el histórico
+completo ni cambia firmware/riego. Ver [configuración, uso y límites](docs/thingspeak.md).
+
+**Simulación de lluvia anterior:** retirada del dashboard por petición del usuario.
+Se conserva su código y [documentación histórica](docs/rain-simulation.md), sin acceso
+desde la tarjeta de clima actual.
+
+**Clima actual:** sustituye la tarjeta Lluvia, sin simulación. Condición, temperatura,
+sensación térmica, humedad y precipitación modeladas por Open-Meteo, separadas del
+ESP32. **Elegir ciudad** permite buscar y seleccionar por ciudad/región/país dentro
+de la tarjeta, sin escribir coordenadas ni cambiar la parcela; selección temporal.
+Requiere proveedor habilitado y confirmación de uso no comercial en el `.env`
+privado. No se inventan datos si falta configuración o falla el servicio.
+Ver [activación y límites](docs/current-weather-card.md).
+
+**Agua y consumo → Ver ejemplo:** muestra 100 L frente a 80 L y una diferencia
+ficticia de 20 L (20 %) dentro de esa misma tarjeta, sin salir del dashboard.
+No representa consumo/ahorro real, no se guarda ni se exporta.
+Ver [ejemplo local y límites](docs/water-consumption-example.md).
+
 `POST /api/v1/iot/telemetry` requiere **`X-Device-Id` (UUID persistente, no serial)** y **`X-Device-Key`**. Un JWT de usuario no sirve para ingresar lecturas. El dispositivo fija `source` al provisionarlo; el mensaje no puede cambiarlo. Snapshot: `GET /api/v1/plots/:id/dashboard`; histórico: `GET /api/v1/plots/:id/readings`, ambos con JWT y propiedad de parcela.
 
 Para usar el simulador **de forma explícita**, sin crear cuentas ni alterar dispositivos reales:
@@ -214,6 +289,14 @@ Detalles, límites, calidad e idempotencia en [fase 3](docs/phase-3.md). No se h
 En modo continuo, el simulador espera y se reconecta si la API local se reinicia o devuelve 429/5xx, conservando el mismo evento para evitar duplicados. Los lotes con `--count` mantienen reintentos acotados. Errores de autenticación, payload rechazado u origen no DEMO siguen deteniendo la simulación; Ctrl+C cancela también la espera de recuperación.
 
 ## Salud del servicio
+
+**Protección de datos local:** disponible
+[respaldo periódico opcional con verificación](docs/periodic-backups.md).
+`npm run backup:periodic -- --once` crea y verifica una copia; el modo continuo
+requiere activarlo explícitamente y mantener el proceso abierto. No está
+programado automáticamente ni elimina copias anteriores.
+Para otra unidad, usar el [comando de segunda copia verificada](docs/external-backup-copy.md);
+la copia a F: no se actualiza automáticamente.
 
 | Endpoint                                  | Significado                                                                                    |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |

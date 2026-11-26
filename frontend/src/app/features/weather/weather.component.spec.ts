@@ -171,4 +171,35 @@ describe('Encabezado de clima privado', () => {
     expect(navigate).toHaveBeenCalledWith('/login');
     http.verify();
   });
+  it.each(['updated', 'cooldown', 'unknown'])(
+    'sincronización %s valida respuesta sin reenvío',
+    async (status) => {
+      const { fixture, http } = await setup('ADMIN');
+      const snapshot = {
+        ...stored,
+        provider: 'open-meteo',
+        profile: { ...stored.profile!, enabled: true },
+      };
+      http.expectOne('/api/v1/plots/plot').flush({ id: 'plot', name: 'Cacao' });
+      http.expectOne('/api/v1/plots/plot/weather').flush(snapshot);
+      const component = fixture.componentInstance;
+      component.sync();
+      const write = http.expectOne('/api/v1/plots/plot/weather/sync');
+      component.load();
+      http.expectNone('/api/v1/plots/plot');
+      expect(write.cancelled).toBe(false);
+      write.flush({ ...snapshot, status });
+      expect(component.uncertain()).toBe(status === 'unknown');
+      if (status === 'unknown') {
+        component.sync();
+        component.save();
+        http.expectNone(() => true);
+        component.load();
+        http.expectOne('/api/v1/plots/plot').flush({ id: 'plot', name: 'Cacao' });
+        http.expectOne('/api/v1/plots/plot/weather').flush(snapshot);
+        expect(component.uncertain()).toBe(false);
+      }
+      http.verify();
+    },
+  );
 });

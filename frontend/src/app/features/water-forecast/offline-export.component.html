@@ -1,0 +1,72 @@
+<section class="panel" aria-labelledby="offline-title" [attr.aria-busy]="busy()">
+  <h2 id="offline-title">Exportar para evaluación offline</h2>
+  <p>
+    Descarga privada de lecturas de suelo. No entrena modelos, no genera pronósticos y no controla
+    el riego.
+  </p>
+  @if (selection(); as selected) {
+    <p class="export-source" [class.demo]="selected.source === 'demo'">
+      {{
+        selected.source === 'demo' ? 'DEMO · Datos simulados' : 'REAL · Calibración no verificada'
+      }}
+      · Solo el equipo seleccionado.
+    </p>
+    <p id="offline-help">
+      Fechas en UTC, no hora local. Desde es inclusivo; los tres fines son exclusivos. Elige tres
+      periodos consecutivos: entrenamiento, validación y prueba. No incluye el día UTC en curso.
+      Máximo 366 días objetivo.
+    </p>
+    <form [formGroup]="form" (ngSubmit)="download()" aria-describedby="offline-help offline-limits">
+      <fieldset [disabled]="busy()">
+        <legend>Periodo y cortes cronológicos (UTC)</legend>
+        <div class="fields">
+          <label for="offline-from"
+            >Desde (UTC)
+            <input id="offline-from" type="date" formControlName="from" required />
+          </label>
+          <label for="offline-train"
+            >Fin de entrenamiento (UTC)
+            <input id="offline-train" type="date" formControlName="trainUntil" required />
+          </label>
+          <label for="offline-validation"
+            >Fin de validación (UTC)
+            <input id="offline-validation" type="date" formControlName="validationUntil" required />
+          </label>
+          <label for="offline-to"
+            >Hasta exclusivo (UTC)
+            <input id="offline-to" type="date" formControlName="toExclusive" required />
+          </label>
+        </div>
+        <button type="submit" [disabled]="busy()">Descargar JSON para evaluación offline</button>
+      </fieldset>
+    </form>
+  } @else {
+    <p>Selecciona un equipo y consulta su cobertura para habilitar la descarga.</p>
+  }
+  @if (busy()) {
+    <p role="status">Preparando archivo privado…</p>
+  }
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+  @if (message()) {
+    <p role="status">{{ message() }}</p>
+  }
+  <p id="offline-limits" class="help">
+    Incluye hasta dos días anteriores para retardos. Máximo 100000 filas de suelo y 16 MB, sin
+    truncar ni rellenar datos. Muchas lecturas no garantizan días suficientes para evaluar.
+  </p>
+  <details>
+    <summary>Cómo usar y proteger el archivo</summary>
+    <p>
+      El JSON contiene identificadores y lecturas privadas, sin claves ni contraseñas. Guárdalo en
+      un archivo nuevo dentro de la carpeta .local del proyecto; no lo subas a GitHub ni
+      sobrescribas otra entrada.
+    </p>
+    <p>
+      Evalúalo después con las herramientas offline de persistencia y regresión. La regresión
+      necesita el entorno Python privado. Esta pantalla no ejecuta esas herramientas ni afirma
+      precisión agrícola.
+    </p>
+  </details>
+</section>

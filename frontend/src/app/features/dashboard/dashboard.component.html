@@ -31,7 +31,7 @@
         <div>
           <span class="eyebrow">CACAO · TECNOLOGÍA · TERRITORIO</span>
           <h2>Conoce tu cultivo.<br />Cuida cada gota.</h2>
-          <p>Monitoreo de tres zonas y trazabilidad del riego local.</p>
+          <p>Humedad del suelo, ambiente y trazabilidad del riego en un solo lugar.</p>
         </div>
         <div class="hero-note">
           <p><app-icon name="water" /> Cuida cada gota</p>
@@ -95,6 +95,14 @@
           <strong>DEMO · Datos simulados</strong> — No representan mediciones del cultivo.
         </p>
       }
+      @if (reading()?.providerObservedAt) {
+        <p class="notice" role="status">
+          Lectura vía ThingSpeak · La fecha mostrada es la recepción en ThingSpeak, no la hora de
+          medición del ESP32. Una consulta al canal no confirma contacto nuevo del dispositivo. Solo
+          hay una sonda de suelo (sensor 1). El relé se consulta en field4; lluvia y confirmación
+          física de válvula no tienen datos.
+        </p>
+      }
       @if (loading()) {
         <p role="status">Cargando dispositivos y parcela…</p>
       }
@@ -102,7 +110,7 @@
         <p class="notice">
           {{
             options().length
-              ? 'Selecciona un dispositivo para ver sus tres sondas sin mezclar datos de otros equipos.'
+              ? 'Selecciona un dispositivo para ver su sensor de suelo sin mezclar datos de otros equipos.'
               : 'No hay dispositivos disponibles de este origen en esta página. No se muestran datos de ejemplo.'
           }}
         </p>
@@ -161,7 +169,7 @@
         <section class="panel soil-panel">
           <div class="panel-title">
             <h2>Humedad del suelo</h2>
-            <span>Tres zonas independientes</span>
+            <span class="sensor-tag">Sensor 1 · Zona A</span>
           </div>
           <div class="soil-grid">
             @for (sensor of sensors; track sensor.code) {
@@ -225,18 +233,10 @@
             {{ timestamp() ? (timestamp() | date: 'dd/MM HH:mm:ss') : 'Esperando una lectura' }}
           </p>
         </section>
-        <section class="panel rain">
-          <h2>Lluvia</h2>
-          <span class="rain-icon"><app-icon name="rain" /></span
-          ><strong>{{
-            reading()?.rainDetected === null || !reading()
-              ? 'Sin datos'
-              : reading()?.rainDetected
-                ? 'Lluvia detectada'
-                : 'Sin lluvia detectada'
-          }}</strong>
-          <p>Detección binaria<br />No mide precipitación en mm</p>
-        </section>
+        <app-current-weather-card
+          [plotId]="plot()?.id ?? ''"
+          [location]="plot()?.locationLabel ?? ''"
+        />
       </div>
       <div class="middle-grid">
         <section class="panel irrigation">
@@ -250,11 +250,18 @@
               <strong>{{
                 reading()?.valve?.relayCommandedOpen === null || !reading()
                   ? 'Orden del relé desconocida'
-                  : reading()?.valve?.relayCommandedOpen
-                    ? 'Orden de apertura'
-                    : 'Orden de cierre'
+                  : reading()?.providerObservedAt
+                    ? reading()?.valve?.relayCommandedOpen
+                      ? 'Relé activo'
+                      : 'Relé apagado'
+                    : reading()?.valve?.relayCommandedOpen
+                      ? 'Orden de apertura'
+                      : 'Orden de cierre'
               }}</strong>
-              <p>Estado informado por el dispositivo. La web no controla la válvula.</p>
+              <p>
+                Estado informado por el dispositivo. La web no controla la válvula. El estado del
+                relé no confirma apertura física ni paso de agua.
+              </p>
             </div>
           </div>
           <div class="irrigation-metrics">

@@ -24,7 +24,9 @@ export const historyStates = (status: ThresholdHistoryState['status']): Threshol
 /** Same time domain as the existing paginated measurement chart; +1ms includes its newest point. */
 export function historyWindow(readings: TelemetryReading[]): { from: string; to: string } | null {
   if (!readings.length) return null;
-  const times = readings.map((row) => Date.parse(row.recordedAt ?? row.receivedAt));
+  const times = readings.map((row) =>
+    Date.parse(row.providerObservedAt ?? row.recordedAt ?? row.receivedAt),
+  );
   if (times.some((time) => !Number.isFinite(time))) return null;
   return {
     from: new Date(Math.min(...times)).toISOString(),

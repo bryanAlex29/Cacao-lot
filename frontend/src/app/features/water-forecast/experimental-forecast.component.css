@@ -1,0 +1,147 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.panel {
+  margin-top: 20px;
+  border: 1px solid #dce6df;
+  border-radius: var(--radius-card);
+  background: #fff;
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+}
+p {
+  line-height: 1.55;
+}
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #426b50;
+}
+h2 {
+  font-size: 1.15rem;
+}
+button {
+  font: inherit;
+  padding: 10px 14px;
+  border: 1px solid #276840;
+  border-radius: 8px;
+  background: #fff;
+  color: #205334;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #08719c;
+  outline-offset: 3px;
+}
+.notice {
+  padding: 12px;
+  background: #eaf3fc;
+  border-radius: 8px;
+}
+.demo {
+  background: #fff2d4;
+}
+.forecast-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.zone {
+  min-width: 0;
+  padding: 16px;
+  background: linear-gradient(125deg, #f2f8ee, #ffffff);
+  border: 1px solid #dce6df;
+  border-radius: 16px;
+  overflow-wrap: anywhere;
+}
+.value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #205334;
+}
+svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 250px;
+}
+svg text {
+  font: 10px sans-serif;
+  fill: #486050;
+}
+.grid {
+  stroke: #c7d5cb;
+}
+path {
+  fill: none;
+  stroke-width: 2;
+}
+.observed {
+  stroke: #1266a3;
+}
+.predicted {
+  stroke: #276840;
+  stroke-dasharray: 5 3;
+}
+.observed-dot {
+  fill: #1266a3;
+}
+.predicted-dot {
+  fill: #276840;
+}
+.legend,
+.help {
+  color: #486050;
+}
+.legend {
+  font-size: 0.85rem;
+}
+summary {
+  cursor: pointer;
+  line-height: 1.5;
+}
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+caption {
+  text-align: left;
+  margin: 12px 0;
+}
+td,
+th {
+  padding: 8px 4px;
+  text-align: left;
+  border-bottom: 1px solid #dce6df;
+}
+dt {
+  margin-top: 10px;
+}
+dd {
+  margin: 4px 0;
+  font-weight: 600;
+}
+[role='alert'] {
+  color: #942e27;
+}
+@media (max-width: 1100px) {
+  .forecast-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .panel {
+    padding: 16px;
+  }
+}

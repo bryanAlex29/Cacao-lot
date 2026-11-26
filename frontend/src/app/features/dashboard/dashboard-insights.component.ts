@@ -4,17 +4,21 @@ import { OfflineAlertsPanelComponent } from './offline-alerts-panel.component';
 import { MoistureAlertsPanelComponent } from './moisture-alerts-panel.component';
 import type { ThresholdSensor } from '../../core/sensor-thresholds/sensor-thresholds.types';
 import { IconComponent } from '../../shared/ui/icon.component';
+import { WaterConsumptionExampleComponent } from './water-consumption-example.component';
 
 @Component({
   selector: 'app-dashboard-insights',
   standalone: true,
-  imports: [OfflineAlertsPanelComponent, MoistureAlertsPanelComponent, IconComponent],
+  imports: [
+    OfflineAlertsPanelComponent,
+    MoistureAlertsPanelComponent,
+    IconComponent,
+    WaterConsumptionExampleComponent,
+  ],
   template: `<div class="top">
       <section class="water">
         <h2><app-icon name="water" /> Agua y consumo</h2>
-        <p>Consumo <strong>No disponible</strong></p>
-        <p>Ahorro <strong>No calculable</strong></p>
-        <span class="note">Requiere caudal calibrado y línea base verificable.</span>
+        <app-water-consumption-example [selection]="selection()" />
       </section>
       <section class="alerts" id="alerts" tabindex="-1">
         <h2><app-icon name="alert" /> Alertas</h2>
@@ -67,19 +71,6 @@ import { IconComponent } from '../../shared/ui/icon.component';
         font-size: 11px;
         color: var(--muted);
         line-height: 1.7;
-      }
-      .water p {
-        background: #f5f7f5;
-        border-radius: 8px;
-        padding: 10px;
-        font-size: 11px;
-        color: var(--muted);
-      }
-      .water strong {
-        display: block;
-        color: #174f35;
-        font-size: 14px;
-        margin-top: 6px;
       }
       .alerts p {
         font-size: 13px;

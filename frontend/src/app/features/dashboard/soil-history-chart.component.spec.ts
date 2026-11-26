@@ -118,22 +118,30 @@ describe('Gráfico y tabla accesible sin alterar las lecturas', () => {
     fixture.detectChanges();
     return fixture;
   }
-  it('mantiene tres series y añade límites identificados, vigencias y advertencia DEMO', () => {
+  it('muestra solo sensor 1 sin mutar lecturas y conserva límites, vigencias y advertencia DEMO', () => {
     const fixture = setup();
     const element: HTMLElement = fixture.nativeElement;
-    expect(element.querySelectorAll('svg path')).toHaveLength(3);
+    expect(element.querySelectorAll('svg path')).toHaveLength(1);
     expect(element.querySelectorAll('line[data-threshold]')).toHaveLength(4);
     expect(element.querySelector('line[data-bound="min"] title')?.textContent).toContain(
       'Zona A · Mín. 20 % · v1',
     );
     expect(element.textContent).toContain('Sin rango configurado');
-    expect(element.textContent).toContain('Rangos históricos no disponibles');
+    expect(element.textContent).not.toContain('Rangos históricos no disponibles');
+    expect(element.textContent).not.toContain('Sensor 2');
+    expect(element.textContent).not.toContain('Sensor 3');
+    expect(element.querySelectorAll('table:last-child thead th').length).toBeGreaterThan(0);
     expect(element.textContent).toContain('DEMO · Mediciones y rangos de demostración');
     expect(element.querySelector('.threshold-table table')?.textContent).toContain('Versión');
     expect(fixture.componentInstance.readings()).toBe(readings);
   });
   it('reintenta solo los rangos y actualiza segmentos sin recrear ni modificar las mediciones', () => {
     const fixture = setup();
+    fixture.componentRef.setInput('thresholds', {
+      ...states(),
+      soil_1: { status: 'error', intervals: [] },
+    });
+    fixture.detectChanges();
     const retry = vi.fn();
     fixture.componentInstance.retryThresholds.subscribe(retry);
     (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
@@ -141,6 +149,6 @@ describe('Gráfico y tabla accesible sin alterar las lecturas', () => {
     fixture.componentRef.setInput('thresholds', historyStates('loading'));
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelectorAll('line[data-threshold]')).toHaveLength(0);
-    expect(fixture.nativeElement.querySelectorAll('svg path')).toHaveLength(3);
+    expect(fixture.nativeElement.querySelectorAll('svg path')).toHaveLength(1);
   });
 });

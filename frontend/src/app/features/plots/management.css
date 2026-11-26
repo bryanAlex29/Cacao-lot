@@ -5,9 +5,9 @@
 }
 section {
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px;
-  background: #f7faf6;
+  border-radius: 18px;
+  padding: 20px;
+  background: linear-gradient(115deg, #f5f9f1, #fcfdfb);
 }
 h4,
 h5 {
@@ -45,6 +45,10 @@ label {
   color: var(--green-dark);
 }
 .fields {
+  border: 0;
+  padding: 0;
+  margin-inline: 0;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 12px;
@@ -62,7 +66,7 @@ textarea {
   max-width: 100%;
   padding: 10px;
   border: 1px solid #a9c7ae;
-  border-radius: 8px;
+  border-radius: 11px;
   font: inherit;
   min-height: 44px;
   background: white;
@@ -102,7 +106,7 @@ button {
   gap: 8px;
   padding: 8px 12px;
   border: 1px solid #a9c7ae;
-  border-radius: 8px;
+  border-radius: 11px;
   background: white;
   color: #17632e;
   cursor: pointer;

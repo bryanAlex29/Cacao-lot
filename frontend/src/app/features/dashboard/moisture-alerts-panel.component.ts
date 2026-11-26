@@ -19,9 +19,9 @@ import { IconComponent } from '../../shared/ui/icon.component';
     }
     @if (selection(); as selected) {
       <details class="alert-settings">
-        <summary>Configuración de alertas A/B/C</summary>
+        <summary>Configuración de alertas · Sensor 1</summary>
         @for (sensor of sensors(); track sensor.id) {
-          @if (sensor.code === 'soil_1' || sensor.code === 'soil_2' || sensor.code === 'soil_3') {
+          @if (sensor.code === 'soil_1') {
             <app-moisture-policy
               [selection]="selected"
               [sensorId]="sensor.id"

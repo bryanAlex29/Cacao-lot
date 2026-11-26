@@ -1,13 +1,26 @@
-# Comparación con DERCAS v1.4 — 2026-11-23
+# Comparación con DERCAS v1.4 — revisión de software 2026-11-25
 
-Revisión actualizada hasta el incremento local 6.3 sobre `9fe2dc1`, conservando gestión 5.15–5.16 y diagnóstico simulado 6.1/6.2. Fuentes: [DERCAS](../contexto/DERCAS_CacaoSmart_v1.4.md) y [AGENTS](../AGENTS_CacaoSmart_v1.4.md). «Implementado» significa software disponible, no validación agronómica ni integración física. Las numeraciones 5.x son incrementos de la fase global 5.
+Revisión de código y documentación hasta simulaciones sintéticas, regresión web
+experimental y preparación local. Conserva gestión 5.15–5.16 y diagnóstico
+simulado 6.1–6.3. Fuentes: [DERCAS](../contexto/DERCAS_CacaoSmart_v1.4.md) y
+[AGENTS](../AGENTS_CacaoSmart_v1.4.md). «Implementado» significa software disponible,
+no validación agronómica ni integración física. Las numeraciones 5.x son
+incrementos de la fase global 5. No equivale a certificado de cumplimiento total.
+
+El usuario excluyó de este incremento el arranque/cierre y la entrega/publicación
+del código. Se revisan experiencia de uso y pendientes de software, manteniendo
+OpenAI, hardware, credenciales, datos principales y reglas de riego intactos.
+Autorización posterior: cerrar los huecos de formularios actuales (punto 4)
+y comenzar operación local (punto 1). La entrega/publicación (punto 5) sigue
+excluida. Evidencia y límites en [revisión de software](software-review.md) y
+[uso local](LOCAL.md); no se declara verificado Ctrl+C desde este host.
 
 ## Requisitos funcionales
 
 | Requisito                  | Estado                              | Evidencia y alcance restante                                                                                                                                                                                                                                                                                                         |
 | -------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | RF-01: autenticación/roles | Implementado en MVP                 | JWT15m renovables con cookie HttpOnly, sesión absoluta8h revocable, Argon2id, propiedad sin ADMIN global. Recuperación, verificación de correo y administración avanzada de sesiones pendientes. Ver session-renewal.md.                                                                                                             |
-| RF-02: parcelas            | Gestión propia API/UI implementada  | ADMIN y FARMER crean parcelas propias; ADMIN propietario edita/archiva desde Angular (5.16). Archivo lógico, sin restauración UI ni transferencia de propiedad.                                                                                                                                                                      |
+| RF-02: parcelas            | Gestión propia API/UI implementada  | ADMIN y FARMER crean parcelas propias; ADMIN propietario edita/archiva. UI conserva borrador ante fallo y bloquea reenvío si no hay confirmación; exige consultar lista antes de continuar. No es idempotencia servidor. Archivo lógico, sin restauración UI ni transferencia de propiedad. |
 | RF-03: dispositivos        | Gestión propia API/UI implementada  | Inventario paginado; ADMIN propietario registra con seis sensores y clave mostrada una vez, habilita/deshabilita (5.15). No asigna entre cuentas, rota claves ni modifica sensores/intervalo después del alta.                                                                                                                       |
 | RF-04: telemetría          | Implementado con simulador          | Tres sondas, ambiente/lluvia, parcial explícita, tiempos, transacción y deduplicación. ESP32/receptor auténticos sin verificar.                                                                                                                                                                                                      |
 | RF-05: dashboard           | Implementado                        | Tres zonas, calidad, fechas, conexión, obsolescencia y errores. No reemplaza reales por demo.                                                                                                                                                                                                                                        |
@@ -18,7 +31,7 @@ Revisión actualizada hasta el incremento local 6.3 sobre `9fe2dc1`, conservando
 | RF-10: consumo             | Cálculo pendiente; UI no disponible | Faltan caudal calibrado y evidencia temporal suficiente. No se inventan litros.                                                                                                                                                                                                                                                      |
 | RF-11: ahorro              | Cálculo pendiente; UI no disponible | Falta línea base comparable documentada y consumo válido.                                                                                                                                                                                                                                                                            |
 | RF-12: CSV                 | Implementado (5.9)                  | Exportación de lecturas y riego observado por fechas, dispositivo/origen y propietario. Fechas personalizadas en panel Reportes, 31 días/10000 filas, sin truncado y con protección de fórmulas.                                                                                                                                     |
-| RF-13: simulación          | Implementado                        | CLI determinista, misma ingesta, aislamiento/origen y etiqueta DEMO. Provisión/inicio explícitos.                                                                                                                                                                                                                                    |
+| RF-13: simulación          | Implementado                        | CLI determinista y 13 escenarios sintéticos, contrato compartido, aislamiento/origen y etiqueta DEMO. Pruebas de telemetría, tiempo real y navegador en bases temporales. Provisión/inicio explícitos; no simula calibración física. |
 | RF-14–22: IA               | Parcial: flujo DEMO 6.1–6.3         | Ruta, captura/subida, consentimiento, sanitización, almacenamiento privado, resultado mock, historial por parcela/fechas/estado, comparación manual de dos fotos/fechas (RF-20), eliminación, cuota, idempotencia y fallos. Pendiente OpenAI real (pospuesto por usuario). No identifica plantas ni declara mejoría automáticamente. |
 | RF-23: registro            | Implementado                        | `/registro`: solo FARMER, contraseña validada, límite de solicitudes y sesión sin asignación automática de parcelas.                                                                                                                                                                                                                 |
 
@@ -31,18 +44,19 @@ Revisión actualizada hasta el incremento local 6.3 sobre `9fe2dc1`, conservando
 | RF-IA-05          | Tres series, discontinuidades, vigencia de límites, hora local y fechas personalizadas en gráfico/tabla (5.12)                       | Validación con telemetría auténtica de campo                                                                       |
 | Tiempo real       | `telemetry.updated` agregado v1.0, `device.status`, `irrigation.updated` y `sensor.status` v1.0, JWT, aislamiento, reconexión y REST | Outbox/clustering si se requieren; verificar escala del barrido por suscriptor                                     |
 | IoT externo       | Canal directo e interfaz externa desacoplada                                                                                         | Protocolo, URL, credenciales y payload auténticos                                                                  |
-| Clima, sección 21 | Sin módulo/tablas                                                                                                                    | Fuentes/licencias/resolución, ingesta idempotente, procedencia, cobertura y unidades                               |
-| RF-PR-01–06       | Sin modelos/API/pantalla                                                                                                             | Target/horizonte, dataset, baseline, regresión offline, evaluación cronológica MAE/RMSE, versiones e incertidumbre |
+| Clima, sección 21 | Módulo/API/UI y tablas ERA5 implementados: consentimiento, perfil versionado, agregación diaria, procedencia, cooldown, worker y pruebas con fixtures | Verificación externa autorizada en ubicación piloto; NASA POWER es opcional y no está integrado. No equivale a estación ni clima futuro. |
+| RF-PR-01/04/05/06 | Exportación privada, dataset as-of, persistencia y regresión de dos retardos offline, métricas MAE/RMSE/sesgo, registro versionado e inferencia/API/UI experimentales | Historial real suficiente, evaluación de campo e incertidumbre calibrada. Solo horizonte implementado de un día UTC; sin clima/balance hídrico ni pronóstico operativo. |
+| RF-PR-02/03       | No implementados el balance hídrico calibrado, déficit, fecha de riego ni litros; respuestas/UI explicitan ausencia | Definir método y parámetros con respaldo agronómico: suelo, Kc, raíces, lluvia efectiva, área, eficiencia y caudal según magnitud. No completar con valores ficticios. |
 | Diseño            | Sidebar/dashboard verdes, tres zonas, riego/IA, gráfico, agua no disponible, alertas/ODS; responsive                                 | Banner SVG en lugar de fotografía no disponible; varias opciones aún informativas/anclas, no pantallas completas   |
-| Operación         | Salud, entorno/DTO, CORS, rate limit, hashes, tests aislados                                                                         | HTTPS/hosting, respaldo/restauración probados, endurecimiento y revisión de dependencias                           |
+| Operación         | Salud, entorno/DTO, CORS, rate limit, sesión renovable, hashes, pruebas aisladas; respaldo DB+fotos restaurado temporalmente, copia externa explícita, herramientas locales | Hosting/dominio no forman parte del alcance estudiantil actual. Programación Neon/cifrado/retención no activados. Auditoría de seguridad completa y pruebas físicas siguen pendientes; no se certifica producción. |
 
 ## Continuación recomendada
 
-1. **Revisión manual de 6.3**; comparación privada de dos fotografías. OpenAI explícitamente en espera, sin operar recursos reales automáticamente.
-2. CSV, eventos separados y fechas personalizadas del gráfico/tabla y riego ya existen: no recrearlos. Las tarjetas actuales y reportes tienen selección temporal independiente del histórico.
-3. Acordar administración adicional: asignación entre cuentas, rotación segura, restauración y configuración con permisos definidos sin acceso global; métricas solo con datos suficientes.
-4. Diagnóstico IA: filtros y comparación ya implementados. Proveedor externo pospuesto por usuario, solo retomarlo con consentimiento nuevo, configuración exclusivamente backend y presupuesto autorizado.
-5. Clima/predicción con procedencia y evaluación reproducible, nunca órdenes de válvula.
-6. Hardware auténtico y validación final/operación; puede adelantarse si se dispone de contrato, sin modificar firmware sin autorización.
+1. [Revisión de experiencia y backlog de software](software-review.md): fallos recuperables, teclado, móvil, no duplicar escrituras ante respuesta perdida y evidencia de pruebas.
+2. No recrear CSV, IA DEMO, clima ni predicción: ya hay implementaciones. Corregir incrementos comprobables sin sustituir datos ausentes por ejemplos.
+3. Administración adicional (rotación de claves, transferencia, restauración y edición de sensores) no se habilita por inferencia: acordar contratos y permisos por separado.
+4. Recuperación/verificación de correo requieren canal externo y política de identidad; no inventar un restablecimiento inseguro local. OpenAI permanece en espera.
+5. Balance hídrico/litros requieren método y parámetros definidos antes de una implementación verificable; los mocks no dan evidencia agronómica.
+6. Hardware y validación de modelos reales tienen dependencias externas explícitas; no bloquean mejorar el software existente.
 
 No se asigna porcentaje global de avance: los requisitos tienen tamaños distintos y dependencias externas. Las pruebas con simulador no son pruebas de campo.

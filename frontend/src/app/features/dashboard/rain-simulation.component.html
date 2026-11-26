@@ -1,0 +1,86 @@
+<section id="rain-simulation" aria-labelledby="rain-simulation-heading">
+  <header>
+    <div>
+      <span class="badge">DEMO · SOLO EN ESTA PÁGINA</span>
+      <h2 id="rain-simulation-heading" #heading tabindex="-1">Simulación de lluvia</h2>
+      <p>Valores ficticios. No son lecturas de ThingSpeak ni de tu parcela.</p>
+    </div>
+    <button type="button" class="primary" (click)="closed.emit()">Volver a datos reales</button>
+  </header>
+  <p class="notice">
+    No se guarda la simulación, no se envía al servidor y no controla el relé ni la válvula. Los
+    pasos son ilustrativos: no representan minutos, una predicción ni cambios instantáneos del suelo
+    por la lluvia.
+  </p>
+  <div class="actions">
+    <p role="status" aria-live="polite">
+      Paso {{ step() + 1 }} de {{ stages.length }} · {{ current().label }}
+    </p>
+    <button type="button" (click)="advance()" [disabled]="last()">Avanzar escenario</button>
+    <button type="button" (click)="restart()" [disabled]="step() === 0">
+      Reiniciar simulación
+    </button>
+  </div>
+  <div class="metrics">
+    <article class="rain">
+      <app-icon name="rain" />
+      <h3>Lluvia · DEMO</h3>
+      <strong>Lluvia simulada</strong>
+      <p>Sin medición de precipitación en mm.</p>
+    </article>
+    <article>
+      <app-icon name="temperature" />
+      <h3>Temperatura ambiental · DEMO</h3>
+      <strong data-testid="demo-temperature">{{ current().temperatureC }} °C</strong>
+      <p>Valor ficticio, no medición ambiental.</p>
+    </article>
+    <article>
+      <app-icon name="water" />
+      <h3>Humedad ambiental · DEMO</h3>
+      <strong data-testid="demo-air">{{ current().airHumidityPct }} %</strong>
+      <p>Valor ficticio, no medición ambiental.</p>
+    </article>
+    <article>
+      <app-icon name="leaf" />
+      <h3>Suelo · Zona A · DEMO</h3>
+      <strong data-testid="demo-soil">{{ current().soilAPct }} %</strong>
+      <p>Valor ficticio, sin clasificación agronómica.</p>
+    </article>
+    <article>
+      <app-icon name="tap" />
+      <h3>Relé y válvula</h3>
+      <strong>Sin simular</strong>
+      <p>No se supone una política de riego. El control físico permanece en el ESP32.</p>
+    </article>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <caption>
+        Escenas DEMO · No es el histórico de mediciones reales
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Escena</th>
+          <th scope="col">Temperatura (°C)</th>
+          <th scope="col">Humedad ambiental (%)</th>
+          <th scope="col">Suelo A (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (stage of stages; track stage.label; let index = $index) {
+          <tr [class.current]="step() === index">
+            <th scope="row">{{ stage.label }}{{ step() === index ? ' · Vista actual' : '' }}</th>
+            <td>{{ stage.temperatureC }}</td>
+            <td>{{ stage.airHumidityPct }}</td>
+            <td>{{ stage.soilAPct }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    No se crean alertas, reportes, diagnósticos, consumo ni ahorro ficticios. La recepción habitual
+    de datos reales sigue funcionando por separado. Al salir, navegar o recargar, estos valores DEMO
+    se descartan.
+  </p>
+</section>

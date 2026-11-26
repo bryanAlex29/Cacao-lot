@@ -14,6 +14,8 @@ import { HistoryQueryDto, SnapshotQueryDto } from './telemetry.dto';
 import { TelemetryRepository } from './telemetry.repository';
 import type { IotTelemetryPayload } from '@cacaosmart/contracts';
 import { RealtimeService } from '../realtime/realtime.service';
+import { requireTelemetryTimestamp } from './ingestion-timestamp';
+import { ExternalObservation, requireExternalObservation } from './external-observation';
 
 @Injectable()
 export class TelemetryService {
@@ -23,18 +25,22 @@ export class TelemetryService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  async ingest(auth: AuthenticatedDevice, input: IotTelemetryPayload) {
+  async ingest(
+    auth: AuthenticatedDevice,
+    input: IotTelemetryPayload,
+    external?: ExternalObservation,
+  ) {
+    if (external) {
+      if (auth.source !== 'real')
+        throw new ForbiddenException('El importador requiere origen REAL');
+      requireExternalObservation(external, input.eventId, input.recordedAt);
+    } else if (input.eventId.startsWith('thingspeak:')) {
+      throw new BadRequestException('Namespace reservado para el importador ThingSpeak');
+    }
     if (input.deviceId.toLowerCase() !== auth.id)
       throw new ForbiddenException('Identidad de dispositivo no coincidente');
     this.sources.require(auth.source);
-    if (
-      input.recordedAt !== null &&
-      (!/(Z|[+-]\d{2}:\d{2})$/.test(input.recordedAt) ||
-        new Date(input.recordedAt).getTime() > Date.now() + 60000)
-    )
-      throw new BadRequestException(
-        'recordedAt requiere zona horaria y no puede superar 60 segundos en el futuro',
-      );
+    requireTelemetryTimestamp(input.recordedAt);
     const canonical = {
       schemaVersion: input.schemaVersion,
       deviceId: auth.id,
@@ -56,7 +62,10 @@ export class TelemetryService {
     const result = await this.repository.ingest(
       auth,
       canonical,
-      createHash('sha256').update(JSON.stringify(canonical)).digest('hex'),
+      createHash('sha256')
+        .update(JSON.stringify(external ? { canonical, external } : canonical))
+        .digest('hex'),
+      external,
     );
     if (!result.duplicate)
       void this.realtime

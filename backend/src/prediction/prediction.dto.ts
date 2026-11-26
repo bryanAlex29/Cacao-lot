@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { Equals } from 'class-validator';
+import { Equals, IsDefined, IsIn, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { PredictionAvailability, PredictionZoneCoverage } from '@cacaosmart/contracts';
 import { SnapshotQueryDto } from '../telemetry/telemetry.dto';
@@ -13,6 +13,23 @@ export class PredictionQueryDto extends SnapshotQueryDto {
   @Type(() => Number)
   @Equals(1)
   horizonDays = 1 as const;
+}
+
+export class ExperimentalForecastQueryDto {
+  @ApiPropertyOptional({ enum: ['real', 'demo'], default: 'real' })
+  @IsIn(['real', 'demo'])
+  source: 'real' | 'demo' = 'real';
+  @ApiPropertyOptional({ enum: [1], default: 1 })
+  @Type(() => Number)
+  @Equals(1)
+  horizonDays = 1 as const;
+  @ApiProperty({
+    format: 'uuid',
+    description: 'Equipo propio explícito; nunca mezcla dispositivos',
+  })
+  @IsDefined()
+  @IsUUID('4')
+  deviceId!: string;
 }
 
 export class PredictionAvailabilityDto implements PredictionAvailability {

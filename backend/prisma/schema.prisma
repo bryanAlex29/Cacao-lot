@@ -69,6 +69,7 @@ model User {
   moisturePolicyAudits       MoisturePolicyAudit[]
   acknowledgedMoistureAlerts MoistureAlert[]
   aiDiagnoses                AiDiagnosis[]
+  predictionModels           PredictionModelVersion[]
 
   @@map("users")
 }
@@ -103,6 +104,7 @@ model Plot {
   moistureAlerts  MoistureAlert[]
   aiDiagnoses     AiDiagnosis[]
   weatherProfile  WeatherProfile?
+  predictionModels PredictionModelVersion[]
 
   @@index([ownerId, archivedAt])
   @@map("plots")
@@ -124,6 +126,7 @@ model Device {
   readings                Reading[]
   offlineAlerts           OfflineAlert[]
   moistureAlerts          MoistureAlert[]
+  predictionModels        PredictionModelVersion[]
 
   @@index([plotId])
   @@map("devices")
@@ -147,6 +150,7 @@ model Sensor {
   moistureState        MoistureAlertState?
   moistureAlerts       MoistureAlert[]
   moisturePolicyAudits MoisturePolicyAudit[]
+  predictionModels     PredictionModelVersion[]
 
   @@unique([deviceId, code])
   @@unique([id, variable, unit])
@@ -417,4 +421,32 @@ model WeatherObservation {
 
   @@unique([plotId, profileVersion, date, variable])
   @@map("weather_observations")
+}
+
+model PredictionModelVersion {
+  id               String          @id @default(uuid()) @db.Uuid
+  ownerId          String          @map("owner_id") @db.Uuid
+  owner            User            @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  plotId           String          @map("plot_id") @db.Uuid
+  plot             Plot            @relation(fields: [plotId], references: [id], onDelete: Restrict)
+  deviceId         String          @map("device_id") @db.Uuid
+  device           Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  sensorId         String          @map("sensor_id") @db.Uuid
+  sensor           Sensor          @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  source           TelemetrySource
+  version          String          @db.VarChar(40)
+  reportHash       String          @map("report_hash") @db.VarChar(64)
+  datasetHash      String          @map("dataset_hash") @db.VarChar(64)
+  inputHash        String          @map("input_hash") @db.VarChar(64)
+  artifactHash     String          @map("artifact_hash") @db.VarChar(64)
+  artifact         Json
+  evaluation       Json
+  trainedUntil     DateTime        @map("trained_until") @db.Timestamptz(3)
+  evaluatedThrough DateTime        @map("evaluated_through") @db.Timestamptz(3)
+  registeredAt     DateTime        @default(now()) @map("registered_at") @db.Timestamptz(3)
+  enabled          Boolean         @default(true)
+
+  @@unique([sensorId, reportHash])
+  @@index([deviceId, source, sensorId, enabled, registeredAt(sort: Desc)], map: "prediction_models_selection_idx")
+  @@map("prediction_model_versions")
 }

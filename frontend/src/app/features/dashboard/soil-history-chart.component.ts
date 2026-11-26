@@ -9,7 +9,9 @@ import {
 /** Use exactly the measurement domain and draw disconnected horizontal segments, never diagonals. */
 export function thresholdLines(readings: TelemetryReading[], states: ThresholdHistoryMap) {
   if (!readings.length) return [];
-  const times = readings.map((row) => Date.parse(row.recordedAt ?? row.receivedAt));
+  const times = readings.map((row) =>
+    Date.parse(row.providerObservedAt ?? row.recordedAt ?? row.receivedAt),
+  );
   const start = Math.min(...times),
     end = Math.max(...times);
   const span = end - start || 1;
@@ -44,7 +46,7 @@ export function chartSegments(
   maxGapMs: number,
 ): { path: string; points: { x: number; y: number }[] } {
   const rows = [...readings].reverse(); // REST descendente, incluye desempate estable.
-  const times = rows.map((r) => Date.parse(r.recordedAt ?? r.receivedAt));
+  const times = rows.map((r) => Date.parse(r.providerObservedAt ?? r.recordedAt ?? r.receivedAt));
   const min = Math.min(...times),
     span = Math.max(...times) - min || 1;
   let path = '',
@@ -86,7 +88,7 @@ export function chartSegments(
       <svg
         viewBox="0 0 700 250"
         role="img"
-        aria-label="Histórico de humedad por zona con mínimos y máximos según su vigencia. Valores y rangos exactos disponibles en las tablas inferiores."
+        aria-label="Histórico de humedad del sensor 1 con mínimos y máximos según su vigencia. Valores y rangos exactos disponibles en las tablas inferiores."
       >
         @for (tick of [0, 25, 50, 75, 100]; track tick) {
           <line
@@ -123,17 +125,19 @@ export function chartSegments(
             fill="none"
             [attr.stroke]="series.color"
             [attr.stroke-dasharray]="series.dash"
-            stroke-width="2.5"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           />
           @for (point of series.points; track $index) {
-            <circle [attr.cx]="point.x" [attr.cy]="point.y" r="2.5" [attr.fill]="series.color" />
+            <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" [attr.fill]="series.color" />
           }
         }
         <text x="45" y="240">{{ oldest() | date: 'dd/MM HH:mm' }}</text>
         <text x="665" y="240" text-anchor="end">{{ newest() | date: 'dd/MM HH:mm' }}</text>
       </svg>
       <div class="legend">
-        <span>━ A · Sensor 1</span><span>┄ B · Sensor 2</span><span>┈ C · Sensor 3</span>
+        <span>━ Sensor 1 · Humedad del suelo</span>
       </div>
       <p class="note">
         Hora local del navegador · {{ readings().length }} lecturas en esta página. Los huecos no se
@@ -217,34 +221,23 @@ export function chartSegments(
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>A (%)</th>
-                <th>B (%)</th>
-                <th>C (%)</th>
+                <th>Sensor 1 (%)</th>
               </tr>
             </thead>
             <tbody>
               @for (row of readings(); track row.eventId) {
                 <tr>
-                  <td>{{ row.recordedAt ?? row.receivedAt | date: 'dd/MM HH:mm:ss' }}</td>
+                  <td>
+                    {{
+                      row.providerObservedAt ?? row.recordedAt ?? row.receivedAt
+                        | date: 'dd/MM HH:mm:ss'
+                    }}
+                  </td>
                   <td>
                     {{
                       row.soilMoisture.soil_1 === null
                         ? 'Sin datos'
                         : (row.soilMoisture.soil_1 | number: '1.0-1')
-                    }}
-                  </td>
-                  <td>
-                    {{
-                      row.soilMoisture.soil_2 === null
-                        ? 'Sin datos'
-                        : (row.soilMoisture.soil_2 | number: '1.0-1')
-                    }}
-                  </td>
-                  <td>
-                    {{
-                      row.soilMoisture.soil_3 === null
-                        ? 'Sin datos'
-                        : (row.soilMoisture.soil_3 | number: '1.0-1')
                     }}
                   </td>
                 </tr>
@@ -322,12 +315,10 @@ export class SoilHistoryChartComponent {
   readonly thresholds = input<ThresholdHistoryMap>(historyStates('idle'));
   readonly source = input<DataSource>('real');
   readonly retryThresholds = output<void>();
-  readonly rangeSensors = [
-    { code: 'soil_1', zone: 'A' },
-    { code: 'soil_2', zone: 'B' },
-    { code: 'soil_3', zone: 'C' },
-  ] as const;
-  readonly thresholdLines = computed(() => thresholdLines(this.readings(), this.thresholds()));
+  readonly rangeSensors = [{ code: 'soil_1', zone: 'A' }] as const;
+  readonly thresholdLines = computed(() =>
+    thresholdLines(this.readings(), this.thresholds()).filter((line) => line.code === 'soil_1'),
+  );
   readonly hasThresholdErrors = computed(() =>
     this.rangeSensors.some(({ code }) => this.thresholds()[code].status === 'error'),
   );
@@ -348,14 +339,14 @@ export class SoilHistoryChartComponent {
   }
   readonly oldest = computed(() => {
     const row = this.readings().at(-1);
-    return row?.recordedAt ?? row?.receivedAt;
+    return row?.providerObservedAt ?? row?.recordedAt ?? row?.receivedAt;
   });
   readonly newest = computed(() => {
     const row = this.readings()[0];
-    return row?.recordedAt ?? row?.receivedAt;
+    return row?.providerObservedAt ?? row?.recordedAt ?? row?.receivedAt;
   });
   readonly series = computed(() =>
-    (['soil_1', 'soil_2', 'soil_3'] as const).map((code, i) => ({
+    (['soil_1'] as const).map((code, i) => ({
       code,
       color: ['#087d16', '#b65b00', '#1263bd'][i],
       dash: ['', '8 4', '2 4'][i],

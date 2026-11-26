@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { loadEnvFile } from 'node:process';
 import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -9,6 +9,8 @@ import { test } from 'node:test';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import sharp from 'sharp';
+import { tmpdir } from 'node:os';
+import { fileHash } from './backup-bundle.mjs';
 import {
   localRestoreSource,
   requireBackupDirectory,
@@ -41,6 +43,9 @@ test(
     await mkdir(base, { recursive: true, mode: 0o700 });
     const imageRoot = await mkdtemp(join(base, 'test-images-'));
     const bundles = [];
+    const externalParent = join(tmpdir(), 'opencode');
+    await mkdir(externalParent, { recursive: true });
+    const external = await mkdtemp(join(externalParent, 'cacaosmart-backup-copy-'));
     let created = false;
     const key = '01234567-89ab-cdef-0123-456789abcdef.jpg';
     const run = (script, args = []) =>
@@ -83,6 +88,46 @@ test(
       assert.ifError(good.error);
       assert.equal(good.status, 0, good.stderr);
       assert.match(good.stdout, /2 tablas.*1 fotografías/);
+      // Exercise the actual periodic entrypoint once, including structured
+      // create output and isolated verification, never an endless test loop.
+      const scheduled = run('periodic-backup.mjs', ['--once']);
+      assert.ifError(scheduled.error);
+      assert.equal(scheduled.status, 0, scheduled.stderr);
+      const scheduledPath = scheduled.stdout.match(/Respaldo periódico verificado: (.+) \(/)?.[1];
+      assert.ok(scheduledPath);
+      const scheduledDirectory = resolve(root, scheduledPath);
+      requireBackupDirectory(base, scheduledDirectory);
+      bundles.push(scheduledDirectory);
+      assert.ok(
+        (await readdir(scheduledDirectory)).some((entry) => entry.startsWith('restore-check-')),
+      );
+      assert.equal((await readdir(base)).includes('periodic.lock'), false);
+      const copied = run('copy-backup.mjs', [
+        '--directory',
+        scheduledDirectory,
+        '--destination',
+        external,
+      ]);
+      assert.ifError(copied.error);
+      assert.equal(copied.status, 0, copied.stderr);
+      const copyPath = copied.stdout.match(/Segunda copia verificada: (.+) \(/)?.[1];
+      assert.ok(copyPath);
+      const copyCheck = JSON.parse(await readFile(join(copyPath, 'copy-check.json'), 'utf8'));
+      assert.equal(copyCheck.allHashesMatched, true);
+      assert.equal(copyCheck.databaseRestored, false);
+      assert.equal(copyCheck.files.length, 4);
+      for (const file of copyCheck.files)
+        assert.equal(
+          await fileHash(join(copyPath, file.name)),
+          await fileHash(join(scheduledDirectory, file.name)),
+        );
+      const duplicate = run('copy-backup.mjs', [
+        '--directory',
+        scheduledDirectory,
+        '--destination',
+        external,
+      ]);
+      assert.notEqual(duplicate.status, 0);
       await writeFile(join(directory, 'images', key), 'corrupted fixture');
       const bad = verify();
       assert.ifError(bad.error);
@@ -111,6 +156,7 @@ test(
         // Only synthetic image/backup directories created and recorded by this test.
         for (const directory of [...bundles, imageRoot])
           await rm(directory, { recursive: true, force: true });
+        await rm(external, { recursive: true, force: true });
       }
     }
   },

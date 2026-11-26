@@ -15,10 +15,16 @@ import { IconComponent } from '../../shared/ui/icon.component';
     <span class="leaf"><app-icon name="leaf" /></span>
     <h3>Sensor {{ number() }}</h3>
     <p>Zona {{ zone() }}</p>
-    <strong
-      >{{ assessment().value === null ? '—' : (assessment().value | number: '1.0-1')
-      }}<small> %</small></strong
+    <div
+      class="gauge"
+      [style.--gauge-fill]="(assessment().value ?? 0) + '%'"
+      [class.no-value]="assessment().value === null"
     >
+      <strong
+        >{{ assessment().value === null ? '—' : (assessment().value | number: '1.0-1')
+        }}<small> %</small></strong
+      >
+    </div>
     <app-sensor-assessment [assessment]="assessment()" />
     <div class="track" aria-hidden="true">
       <div
@@ -36,10 +42,10 @@ import { IconComponent } from '../../shared/ui/icon.component';
         min-width: 0;
       }
       article {
-        padding: 18px 12px;
-        background: #f7faf6;
-        border: 1px solid #e2e7e2;
-        border-radius: 14px;
+        padding: 16px 12px;
+        background: transparent;
+        border: 0;
+        border-radius: 18px;
         text-align: center;
         height: 100%;
       }
@@ -58,17 +64,42 @@ import { IconComponent } from '../../shared/ui/icon.component';
       }
       strong {
         display: block;
-        font-size: 32px;
-        color: #087d16;
+        position: relative;
+        font-size: 38px;
+        letter-spacing: -1.5px;
+        color: var(--green-dark);
       }
       small {
         font-size: 17px;
+      }
+      .gauge {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 152px;
+        height: 152px;
+        max-width: 100%;
+        margin: 14px auto 20px;
+        border-radius: 50%;
+        background: conic-gradient(var(--green) var(--gauge-fill), #dfeadf 0);
+        box-shadow: 0 0 0 7px #edf4e9;
+      }
+      .gauge::before {
+        content: '';
+        position: absolute;
+        inset: 10px;
+        border-radius: 50%;
+        background: #fcfefb;
+      }
+      .gauge.no-value {
+        background: #e1e9e1;
       }
       .track {
         height: 7px;
         background: #e2e7e2;
         border-radius: 8px;
         overflow: hidden;
+        margin: 12px 0;
       }
       .track div {
         height: 100%;

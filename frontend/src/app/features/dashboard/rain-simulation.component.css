@@ -1,0 +1,139 @@
+:host {
+  display: block;
+  margin-top: 16px;
+}
+section {
+  padding: 20px;
+  border: 2px solid #1263bd;
+  border-radius: var(--radius-card, 16px);
+  background: #f5faff;
+  color: #173c51;
+}
+header,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.badge {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 16px;
+  background: #dceff7;
+  color: #114f70;
+  font-size: 12px;
+  font-weight: bold;
+}
+h2 {
+  margin: 12px 0;
+  font-size: 22px;
+}
+p {
+  line-height: 1.6;
+  font-size: 13px;
+}
+.notice {
+  padding: 14px;
+  background: #dceff7;
+  border-radius: 10px;
+}
+button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid #1263bd;
+  border-radius: 8px;
+  background: white;
+  color: #114f70;
+  font: inherit;
+  font-weight: bold;
+  cursor: pointer;
+}
+button.primary {
+  background: #087d16;
+  border-color: #087d16;
+  color: white;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+button:focus-visible,
+h2:focus-visible {
+  outline: 3px solid #1263bd;
+  outline-offset: 4px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+article {
+  min-width: 0;
+  padding: 18px;
+  background: white;
+  border: 1px solid #c5d9e8;
+  border-radius: 14px;
+}
+article.rain {
+  grid-column: 1 / -1;
+  background: linear-gradient(110deg, #dceff7, #f2f8fc);
+}
+article app-icon {
+  color: #1263bd;
+  font-size: 32px;
+}
+h3 {
+  font-size: 14px;
+  line-height: 1.5;
+}
+strong {
+  display: block;
+  font-size: 27px;
+}
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  font-size: 13px;
+}
+caption {
+  text-align: left;
+  padding: 12px 0;
+  font-weight: bold;
+}
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid #c5d9e8;
+  text-align: left;
+}
+tr.current {
+  background: #dceff7;
+}
+.note {
+  margin-bottom: 0;
+}
+@media (max-width: 1000px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  section {
+    padding: 14px;
+  }
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+  header button,
+  .actions button {
+    width: 100%;
+  }
+}

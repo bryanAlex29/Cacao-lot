@@ -1,20 +1,34 @@
-import { Component, DestroyRef, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { forkJoin, Subscription, timeout } from 'rxjs';
-import type { PlotSummary, PredictionAvailability } from '@cacaosmart/contracts';
+import type {
+  PlotSummary,
+  PredictionAvailability,
+  TelemetrySubscription,
+} from '@cacaosmart/contracts';
 import { AuthService } from '../../core/auth/auth.service';
 import { DevicesApi, RegisteredDevice } from '../../core/devices/devices-api.service';
 import { AppSidebarComponent } from '../../shared/ui/app-sidebar.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { PredictionApi } from './prediction-api.service';
+import { OfflineExportComponent } from './offline-export.component';
+import { ExperimentalForecastComponent } from './experimental-forecast.component';
+import { RegressionForecastComponent } from './regression-forecast.component';
 
 @Component({
   selector: 'app-water-forecast',
   standalone: true,
-  imports: [DatePipe, AppSidebarComponent, PageHeaderComponent],
+  imports: [
+    DatePipe,
+    AppSidebarComponent,
+    PageHeaderComponent,
+    OfflineExportComponent,
+    ExperimentalForecastComponent,
+    RegressionForecastComponent,
+  ],
   templateUrl: './water-forecast.component.html',
   styleUrls: ['./water-forecast.component.css', '../../shared/ui/workspace.css'],
 })
@@ -32,6 +46,12 @@ export class WaterForecastComponent {
   readonly offset = signal(0);
   readonly selectedId = signal('');
   readonly snapshot = signal<PredictionAvailability | null>(null);
+  readonly exportSelection = computed<TelemetrySubscription | null>(() => {
+    const data = this.snapshot();
+    return data?.device && data.device.id === this.selectedId()
+      ? { plotId: data.plotId, deviceId: data.device.id, source: data.source }
+      : null;
+  });
   readonly busy = signal(false);
   readonly error = signal('');
   readonly zoneNames = { soil_1: 'Zona A', soil_2: 'Zona B', soil_3: 'Zona C' };

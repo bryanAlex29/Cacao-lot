@@ -1,0 +1,148 @@
+<section class="forecast panel" aria-labelledby="regression-title" [attr.aria-busy]="busy()">
+  <span class="eyebrow">REGRESIÓN MÚLTIPLE · EXPERIMENTAL</span>
+  <h2 id="regression-title">Humedad por zona con modelo registrado</h2>
+  <p>
+    Utiliza la regresión de dos retardos entrenada y evaluada offline para esta sonda. Al consultar
+    no se entrena, no se elige automáticamente un ganador y no se consulta clima ni OpenAI.
+  </p>
+  <button type="button" (click)="load()" [disabled]="!selection() || busy()">
+    {{ busy() ? 'Consultando regresión…' : 'Consultar regresión experimental' }}
+  </button>
+  @if (!selection()) {
+    <p>Selecciona un equipo y consulta su cobertura para continuar.</p>
+  }
+  @if (error()) {
+    <p role="alert">{{ error() }}</p>
+  }
+  @if (data(); as snapshot) {
+    <p class="notice" [class.demo]="snapshot.source === 'demo'">
+      <strong>{{
+        snapshot.source === 'demo' ? 'DEMO · Datos simulados' : 'REAL · Datos almacenados'
+      }}</strong>. Sin validación de campo ni incertidumbre calibrada. Las métricas de un
+      experimento no acreditan precisión en el cultivo.
+    </p>
+    <p>
+      Objetivo: cierre del {{ snapshot.target.from | date: 'dd/MM/yyyy' : 'UTC' }} UTC, no las
+      próximas 24 horas desde el clic. Corte:
+      {{ snapshot.informationCutoff | date: 'dd/MM/yyyy HH:mm' : 'UTC' }} UTC. Generado:
+      {{ snapshot.generatedAt | date: 'dd/MM/yyyy HH:mm:ss' : 'UTC' }} UTC.
+    </p>
+    <div class="forecast-grid">
+      @for (zone of snapshot.zones; track zone.code) {
+        @if (zone.code === 'soil_1') {
+          <section class="zone" [attr.aria-labelledby]="'regression-' + zone.code">
+            <h3 [id]="'regression-' + zone.code">{{ names[zone.code] }}</h3>
+            <p class="value">
+              {{
+                zone.predictedPct === null
+                  ? 'No disponible'
+                  : (zone.predictedPct | number: '1.0-2') + ' %'
+              }}
+            </p>
+            <p>{{ reasons[zone.reason] }}</p>
+            <p>
+              Persistencia con las mismas entradas:
+              <strong>{{
+                zone.persistencePct === null
+                  ? 'No disponible'
+                  : (zone.persistencePct | number: '1.0-2') + ' %'
+              }}</strong>.
+            </p>
+            @if (zone.model; as model) {
+              <p>
+                Versión {{ model.version }} · {{ model.trainSamples }} muestras de entrenamiento.
+                Entrenado con días anteriores a {{ model.trainedUntilExclusive }} UTC. Evaluado
+                hasta {{ model.evaluatedThrough | date: 'dd/MM/yyyy HH:mm' : 'UTC' }} UTC.
+                Registrado {{ model.registeredAt | date: 'dd/MM/yyyy HH:mm' : 'UTC' }} UTC.
+              </p>
+              <details>
+                <summary>Comparar validación y prueba sobre las mismas fechas</summary>
+                @for (partition of partitions; track partition.key) {
+                  <div class="table-scroll">
+                    <table>
+                      <caption>
+                        {{
+                          partition.label
+                        }}
+                        ·
+                        {{
+                          model.evaluation[partition.key].regression.samples
+                        }}
+                        pares · errores en puntos porcentuales
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th>Método</th>
+                          <th>MAE</th>
+                          <th>RMSE</th>
+                          <th>Sesgo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <th scope="row">Regresión</th>
+                          <td>
+                            {{ model.evaluation[partition.key].regression.maePp | number: '1.0-3' }}
+                          </td>
+                          <td>
+                            {{
+                              model.evaluation[partition.key].regression.rmsePp | number: '1.0-3'
+                            }}
+                          </td>
+                          <td>
+                            {{
+                              model.evaluation[partition.key].regression.biasPp | number: '1.0-3'
+                            }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Persistencia</th>
+                          <td>
+                            {{
+                              model.evaluation[partition.key].persistence.maePp | number: '1.0-3'
+                            }}
+                          </td>
+                          <td>
+                            {{
+                              model.evaluation[partition.key].persistence.rmsePp | number: '1.0-3'
+                            }}
+                          </td>
+                          <td>
+                            {{
+                              model.evaluation[partition.key].persistence.biasPp | number: '1.0-3'
+                            }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p>
+                    Salidas de regresión fuera de rango en esa evaluación:
+                    {{ model.evaluation[partition.key].regression.outOfRangePredictions }}. No se
+                    ocultaron recortándolas.
+                  </p>
+                }
+              </details>
+            }
+            @if (zone.features; as features) {
+              <details>
+                <summary>Ver lecturas conocidas al corte</summary>
+                @for (feature of features; track feature.lag) {
+                  <p>
+                    Retardo {{ feature.lag }}: {{ feature.moisturePct | number: '1.0-2' }} %.
+                    Observado {{ feature.observedAt | date: 'dd/MM/yyyy HH:mm:ss' : 'UTC' }} UTC,
+                    recibido {{ feature.receivedAt | date: 'dd/MM/yyyy HH:mm:ss' : 'UTC' }} UTC.
+                  </p>
+                }
+              </details>
+            }
+          </section>
+        }
+      }
+    </div>
+    <p class="help">
+      No calcula déficit, litros, ahorro ni fecha de riego. Nunca controla válvulas. El registro de
+      un modelo es una operación local explícita; no se crean modelos de ejemplo en tu cuenta.
+    </p>
+  }
+</section>

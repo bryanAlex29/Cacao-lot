@@ -1,4 +1,4 @@
-import { ApiProperty, OmitType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import type { TelemetryReading, ConnectionStatus } from '@cacaosmart/contracts';
 import { IngestTelemetryDto } from './telemetry.dto';
 
@@ -10,6 +10,11 @@ export class TelemetryReadingDto extends OmitType(IngestTelemetryDto, [
   source!: 'real' | 'demo';
   @ApiProperty({ format: 'date-time' })
   receivedAt!: string;
+  @ApiPropertyOptional({
+    format: 'date-time',
+    description: 'Recepción por ThingSpeak, no hora del ESP32.',
+  })
+  providerObservedAt?: string;
   @ApiProperty({ enum: ['device', 'server'] })
   timestampOrigin!: 'device' | 'server';
   @ApiProperty({

@@ -71,7 +71,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
               <app-icon name="monitor" /> Registrar equipo en esta parcela
             </summary>
             <form [formGroup]="form" (ngSubmit)="create()">
-              <div class="fields">
+              <fieldset class="fields" [disabled]="busy()" aria-label="Datos del equipo nuevo">
                 <label
                   >Serie del equipo
                   <input
@@ -106,20 +106,28 @@ import { IconComponent } from '../../shared/ui/icon.component';
                     "
                   />
                 </label>
-              </div>
+              </fieldset>
               <p class="help">
                 Serie de 3–100 caracteres: letras, números, punto, guion, guion bajo o dos puntos.
                 Intervalo entero de 1 a 86400 segundos. El origen no se cambia después del alta.
               </p>
               <label class="check"
-                ><input type="checkbox" formControlName="confirmed" />
+                ><input
+                  type="checkbox"
+                  formControlName="confirmed"
+                  [attr.disabled]="busy() ? '' : null"
+                />
                 Confirmo la parcela y el origen; guardaré la clave en un lugar seguro.
               </label>
               @if (form.touched && form.invalid) {
                 <p role="alert">Revisa la serie, el intervalo y la confirmación.</p>
               }
               <div class="actions">
-                <button class="primary" type="submit" [disabled]="busy() || uncertain()">
+                <button
+                  class="primary"
+                  type="submit"
+                  [disabled]="busy() || uncertain() || inventoryBusy()"
+                >
                   {{ busy() ? 'Procesando…' : 'Registrar dispositivo' }}
                 </button>
               </div>
@@ -132,7 +140,11 @@ import { IconComponent } from '../../shared/ui/icon.component';
             comprueba la serie antes de intentar otra alta. Si el equipo existe y perdiste la clave,
             no puede recuperarse desde esta pantalla.
           </p>
-          <button type="button" (click)="reviewed()" [disabled]="busy()">
+          <button
+            type="button"
+            (click)="reviewed()"
+            [disabled]="busy() || inventoryBusy() || inventoryRevision() <= failedCreateRevision()"
+          >
             Revisé el inventario · Desbloquear formulario
           </button>
         }
@@ -156,7 +168,11 @@ import { IconComponent } from '../../shared/ui/icon.component';
                   device.isActive ? 'Habilitado' : 'Deshabilitado'
                 }}</span>
               </div>
-              <button type="button" [disabled]="busy()" (click)="openTarget(device, $event)">
+              <button
+                type="button"
+                [disabled]="busy() || uncertainToggle() || inventoryBusy()"
+                (click)="openTarget(device, $event)"
+              >
                 {{ device.isActive ? 'Deshabilitar' : 'Habilitar' }} {{ device.serial }}
               </button>
             </li>
@@ -178,7 +194,12 @@ import { IconComponent } from '../../shared/ui/icon.component';
               {{ device.serial }}? No es una orden de riego.
             </p>
             <div class="actions">
-              <button class="primary" type="button" [disabled]="busy()" (click)="setActive()">
+              <button
+                class="primary"
+                type="button"
+                [disabled]="busy() || uncertainToggle() || inventoryBusy()"
+                (click)="setActive()"
+              >
                 Confirmar cambio de habilitación
               </button>
               <button #cancelToggle type="button" [disabled]="busy()" (click)="cancelTarget()">
@@ -195,6 +216,8 @@ import { IconComponent } from '../../shared/ui/icon.component';
 export class DeviceManagementComponent {
   readonly plotId = input.required<string>();
   readonly devices = input<RegisteredDevice[]>([]);
+  readonly inventoryRevision = input(0);
+  readonly inventoryBusy = input(false);
   readonly changed = output<void>();
   readonly auth = inject(AuthService);
   readonly demoAllowed = isDevMode();
@@ -207,6 +230,9 @@ export class DeviceManagementComponent {
   private targetTrigger: HTMLElement | null = null;
   readonly busy = signal(false);
   readonly uncertain = signal(false);
+  readonly uncertainToggle = signal(false);
+  readonly failedCreateRevision = signal(0);
+  private failedToggleRevision = 0;
   readonly error = signal('');
   readonly message = signal('');
   readonly credential = signal<{ id: string; deviceKey: string } | null>(null);
@@ -233,12 +259,20 @@ export class DeviceManagementComponent {
         this.error.set('');
         this.message.set('');
         this.uncertain.set(false);
+        this.uncertainToggle.set(false);
         this.form.reset();
       });
     });
     inject(DestroyRef).onDestroy(() => {
       this.request.unsubscribe();
       this.credential.set(null);
+    });
+    effect(() => {
+      const revision = this.inventoryRevision();
+      untracked(() => {
+        if (this.uncertainToggle() && revision > this.failedToggleRevision)
+          this.uncertainToggle.set(false);
+      });
     });
     effect(() => {
       if (this.auth.user()?.role !== 'ADMIN') {
@@ -261,7 +295,13 @@ export class DeviceManagementComponent {
   }
 
   create(): void {
-    if (this.busy() || this.uncertain() || this.credential() || this.auth.user()?.role !== 'ADMIN')
+    if (
+      this.busy() ||
+      this.inventoryBusy() ||
+      this.uncertain() ||
+      this.credential() ||
+      this.auth.user()?.role !== 'ADMIN'
+    )
       return;
     this.form.markAllAsTouched();
     if (this.form.invalid) return;
@@ -288,6 +328,7 @@ export class DeviceManagementComponent {
             typeof response.deviceKey !== 'string' ||
             !/^[a-f0-9]{64}$/.test(response.deviceKey)
           ) {
+            this.failedCreateRevision.set(this.inventoryRevision());
             this.uncertain.set(true);
             this.changed.emit();
             return;
@@ -299,6 +340,7 @@ export class DeviceManagementComponent {
         error: (error: unknown) => {
           this.busy.set(false);
           const status = error instanceof HttpErrorResponse ? error.status : 0;
+          this.failedCreateRevision.set(this.inventoryRevision());
           this.uncertain.set(![400, 401, 403, 404, 409, 429].includes(status));
           this.error.set(
             status === 409
@@ -319,7 +361,13 @@ export class DeviceManagementComponent {
     });
   }
   openTarget(device: RegisteredDevice, event: Event): void {
-    if (this.busy() || this.auth.user()?.role !== 'ADMIN' || device.plotId !== this.plotId())
+    if (
+      this.busy() ||
+      this.uncertainToggle() ||
+      this.inventoryBusy() ||
+      this.auth.user()?.role !== 'ADMIN' ||
+      device.plotId !== this.plotId()
+    )
       return;
     this.targetTrigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     this.target.set(device);
@@ -345,6 +393,12 @@ export class DeviceManagementComponent {
     );
   }
   reviewed(): void {
+    if (
+      this.busy() ||
+      this.inventoryBusy() ||
+      this.inventoryRevision() <= this.failedCreateRevision()
+    )
+      return;
     this.uncertain.set(false);
     this.error.set('');
   }
@@ -354,30 +408,49 @@ export class DeviceManagementComponent {
       !device ||
       device.plotId !== this.plotId() ||
       this.busy() ||
+      this.uncertainToggle() ||
+      this.inventoryBusy() ||
       this.auth.user()?.role !== 'ADMIN'
     )
       return;
     this.busy.set(true);
     this.error.set('');
     this.message.set('');
+    const active = !device.isActive;
+    const fail = () => {
+      this.busy.set(false);
+      this.target.set(null);
+      this.failedToggleRevision = this.inventoryRevision();
+      this.uncertainToggle.set(true);
+      this.error.set(
+        'No se confirmó el cambio. Actualiza correctamente el inventario antes de otro cambio; no se reenvió.',
+      );
+      this.changed.emit();
+    };
     this.request = this.http
-      .patch(this.url() + '/' + encodeURIComponent(device.id), { isActive: !device.isActive })
+      .patch<unknown>(this.url() + '/' + encodeURIComponent(device.id), { isActive: active })
       .pipe(timeout(15000))
       .subscribe({
-        next: () => {
+        next: (response) => {
+          if (
+            !response ||
+            typeof response !== 'object' ||
+            !('id' in response) ||
+            response.id !== device.id ||
+            !('plotId' in response) ||
+            response.plotId !== this.plotId() ||
+            !('isActive' in response) ||
+            response.isActive !== active
+          ) {
+            fail();
+            return;
+          }
           this.busy.set(false);
           this.target.set(null);
           this.message.set('Habilitación actualizada. No se envió ninguna orden a la válvula.');
           this.changed.emit();
         },
-        error: () => {
-          this.busy.set(false);
-          this.target.set(null);
-          this.error.set(
-            'No se confirmó el cambio. Consulta el inventario antes de volver a intentarlo; no se reenvió.',
-          );
-          this.changed.emit();
-        },
+        error: fail,
       });
   }
   private url(): string {

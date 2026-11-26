@@ -31,7 +31,12 @@
             (ngSubmit)="create()"
             [attr.aria-busy]="saving()"
           >
-            <div class="fields">
+            <fieldset
+              class="fields"
+              [disabled]="saving()"
+              aria-label="Datos de la parcela nueva"
+              aria-describedby="create-validation"
+            >
               <label
                 >Nombre<input
                   formControlName="name"
@@ -58,14 +63,25 @@
                     form.controls.areaM2.touched && form.controls.areaM2.invalid
                   "
               /></label>
-            </div>
-            @if (form.touched && form.invalid) {
-              <p class="validation" role="alert">
-                Completa nombre y ubicación; la superficie, si se indica, debe ser positiva.
+            </fieldset>
+            <p
+              id="create-validation"
+              class="validation"
+              [attr.role]="form.touched && form.invalid ? 'alert' : null"
+            >
+              @if (form.touched && form.invalid) {
+                Completa nombre y ubicación con texto; la superficie, si se indica, debe ser
+                positiva.
+              }
+            </p>
+            @if (uncertainCreate()) {
+              <p role="status">
+                El borrador se conserva, pero no sabemos si se guardó. Pulsa Actualizar en la lista
+                y revísala antes de intentar crear otra parcela. No se reenvía automáticamente.
               </p>
             }
             <div class="form-actions">
-              <button type="submit" [disabled]="saving() || busy()">
+              <button type="submit" [disabled]="saving() || busy() || uncertainCreate()">
                 {{ saving() ? 'Guardando…' : 'Crear parcela' }}
               </button>
             </div>

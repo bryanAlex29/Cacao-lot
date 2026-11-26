@@ -89,6 +89,14 @@ describe('TelemetryFacade: recuperación REST y aislamiento', () => {
   });
   const flush = () => vi.advanceTimersByTime(110);
 
+  it('does not make an old ThingSpeak entry fresh just because it was imported now', () => {
+    facade.snapshot.set({
+      ...snapshot,
+      reading: { ...reading, providerObservedAt: '2026-11-19T23:00:00Z' },
+    });
+    expect(facade.readingStale()).toBe(true);
+  });
+
   it('recupera snapshot e histórico sin convertir null/cero ni feedback desconocido', () => {
     facade.select(selection);
     flush();

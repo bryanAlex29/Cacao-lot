@@ -40,6 +40,7 @@ import { HistoryPeriodComponent } from './history-period.component';
 import { AppSidebarComponent, DashboardSection } from '../../shared/ui/app-sidebar.component';
 import { IconComponent } from '../../shared/ui/icon.component';
 import { HeaderConnection, PageHeaderComponent } from '../../shared/ui/page-header.component';
+import { CurrentWeatherCardComponent } from './current-weather-card.component';
 
 interface DeviceOption {
   id: string;
@@ -70,6 +71,7 @@ interface DeviceOption {
     AppSidebarComponent,
     IconComponent,
     PageHeaderComponent,
+    CurrentWeatherCardComponent,
   ],
   providers: [TelemetryFacade, SensorThresholdsFacade, ThresholdHistoryFacade],
   templateUrl: './dashboard.component.html',
@@ -121,7 +123,11 @@ export class DashboardComponent implements OnInit {
   });
   readonly reading = computed(() => this.telemetry.snapshot()?.reading ?? null);
   readonly timestamp = computed(
-    () => this.reading()?.recordedAt ?? this.reading()?.receivedAt ?? null,
+    () =>
+      this.reading()?.providerObservedAt ??
+      this.reading()?.recordedAt ??
+      this.reading()?.receivedAt ??
+      null,
   );
   readonly stale = computed(
     () =>
@@ -167,11 +173,7 @@ export class DashboardComponent implements OnInit {
       });
     return { temperatureC: assess('temperatureC'), airHumidityPct: assess('airHumidityPct') };
   });
-  readonly sensors = [
-    { code: 'soil_1', number: 1, zone: 'A' },
-    { code: 'soil_2', number: 2, zone: 'B' },
-    { code: 'soil_3', number: 3, zone: 'C' },
-  ] as const;
+  readonly sensors = [{ code: 'soil_1', number: 1, zone: 'A' }] as const;
   constructor() {
     this.deviceControl.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))

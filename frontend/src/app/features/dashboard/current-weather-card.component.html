@@ -1,0 +1,120 @@
+<div class="weather-card" aria-live="polite" [attr.aria-busy]="busy()">
+  <h2>Clima actual</h2>
+  <p class="location">{{ displayedLocation() }}</p>
+  @if (selectedCity()) {
+    <p class="note">Clima de referencia de la ciudad, no ubicación exacta de la parcela.</p>
+  }
+  <button
+    class="choose-city"
+    type="button"
+    (click)="toggleCityPicker()"
+    [attr.aria-expanded]="cityPickerOpen()"
+  >
+    {{ selectedCity() ? 'Cambiar ciudad' : 'Elegir ciudad' }}
+  </button>
+  @if (cityPickerOpen()) {
+    <form class="city-search" (submit)="$event.preventDefault(); searchCities()">
+      <label
+        >Ciudad
+        <input
+          type="search"
+          [formControl]="cityQuery"
+          placeholder="Ej.: Chone"
+          maxlength="80"
+          autocomplete="off"
+        />
+      </label>
+      <p class="note">
+        Al buscar se envía el nombre a Open-Meteo/GeoNames. No se cambia la parcela. La selección
+        dura mientras permanezcas en este dashboard.
+      </p>
+      <button type="submit" [disabled]="citySearchBusy()">
+        {{ citySearchBusy() ? 'Buscando…' : 'Buscar ciudad' }}
+      </button>
+    </form>
+    <p class="note search-message" role="status">{{ citySearchMessage() }}</p>
+    @if (cityResults().length) {
+      <ul class="city-results" aria-label="Ciudades encontradas">
+        @for (city of cityResults(); track city.id) {
+          <li>
+            <button type="button" (click)="chooseCity(city)">{{ cityLabel(city) }}</button>
+          </li>
+        }
+      </ul>
+    }
+    @if (selectedCity()) {
+      <button class="use-plot" type="button" (click)="usePlotLocation()">
+        Usar ubicación de la parcela
+      </button>
+    }
+  }
+  @if (busy()) {
+    <p class="state">Consultando clima…</p>
+  } @else if (error()) {
+    <p class="state">{{ error() }}</p>
+  } @else if (data()?.current; as current) {
+    <div class="conditions">
+      <span class="weather-icon" aria-hidden="true">{{
+        appearance(current.weatherCode, current.isDay).icon
+      }}</span>
+      <strong class="temperature">{{
+        current.temperatureC === null ? '—' : (current.temperatureC | number: '1.0-1') + ' °C'
+      }}</strong>
+    </div>
+    <p class="condition">{{ appearance(current.weatherCode, current.isDay).label }}</p>
+    <dl>
+      <div>
+        <dt>Sensación</dt>
+        <dd>
+          {{
+            current.apparentTemperatureC === null
+              ? 'Sin datos'
+              : (current.apparentTemperatureC | number: '1.0-1') + ' °C'
+          }}
+        </dd>
+      </div>
+      <div>
+        <dt>Humedad</dt>
+        <dd>
+          {{
+            current.humidityPct === null
+              ? 'Sin datos'
+              : (current.humidityPct | number: '1.0-0') + ' %'
+          }}
+        </dd>
+      </div>
+      <div>
+        <dt>Precipitación</dt>
+        <dd>
+          {{
+            current.precipitationMm === null
+              ? 'Sin datos'
+              : (current.precipitationMm | number: '1.0-2') + ' mm'
+          }}
+        </dd>
+      </div>
+    </dl>
+    <p class="note">
+      Precipitación en los {{ current.intervalSeconds / 60 | number: '1.0-1' }} min anteriores a la
+      hora del clima.
+    </p>
+    <p class="note">
+      Hora del clima: {{ current.observedAt | date: 'dd/MM HH:mm' }}<br />Consultado:
+      {{ current.fetchedAt | date: 'dd/MM HH:mm' }} · hora local
+    </p>
+  } @else {
+    <p class="state">Clima no disponible</p>
+    <p class="note">
+      {{
+        data()?.status === 'disabled'
+          ? 'Servicio meteorológico desactivado.'
+          : 'Elige una ciudad aquí o configura las coordenadas autorizadas de la parcela.'
+      }}
+    </p>
+    <a [routerLink]="['/parcelas', plotId(), 'clima']">Ver configuración de clima</a>
+  }
+  <p class="source">Open-Meteo · Clima modelado<br />No es una medición del ESP32.</p>
+  <button class="refresh-weather" type="button" (click)="reload()" [disabled]="busy()">
+    Actualizar clima
+  </button>
+</div>

@@ -58,37 +58,64 @@ label {
 .hero {
   position: relative;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 15px;
-  background: linear-gradient(115deg, #00351e, #195a31);
+  background:
+    radial-gradient(ellipse at 75% 10%, #507d4c80, transparent 55%),
+    linear-gradient(115deg, #103e30, #164a36 60%, #24553c);
   color: white;
-  padding: 26px 30px;
-  min-height: 180px;
-  box-shadow: var(--shadow-card);
+  padding: 32px 36px;
+  min-height: 224px;
+  box-shadow: 0 16px 36px -20px #103e3080;
+  isolation: isolate;
+}
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 260px;
+  height: 380px;
+  right: 16%;
+  top: -120px;
+  border: 1px solid #cfddb532;
+  border-radius: 100% 0 100% 0;
+  transform: rotate(25deg);
+  background: linear-gradient(120deg, #c6d3a80b, transparent);
+  pointer-events: none;
+}
+.hero::after {
+  right: 5%;
+  top: -30px;
+  transform: rotate(-30deg);
 }
 .hero .eyebrow {
   color: #d2e4b1;
 }
 .hero h2 {
-  font-size: 30px;
+  font-size: clamp(29px, 3vw, 42px);
   margin: 12px 0;
-  line-height: 1.15;
+  line-height: 1.14;
+  letter-spacing: -1.4px;
 }
 .hero p {
-  font-size: 12px;
+  font-size: 13px;
   color: #d9ead9;
   margin: 0;
 }
 .hero-note {
-  border-left: 1px solid #8fac8d;
-  padding-left: 24px;
+  border: 1px solid #ffffff24;
+  border-radius: 18px;
+  padding: 16px 20px;
+  background: #ffffff0a;
   font-size: 13px;
   font-weight: bold;
   line-height: 1.8;
-  max-width: 190px;
+  max-width: 230px;
+  flex-shrink: 0;
 }
 .hero-note span {
   display: block;
@@ -109,7 +136,7 @@ label {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
-  padding: 20px;
+  padding: 24px;
   min-width: 0;
 }
 .controls {
@@ -117,8 +144,9 @@ label {
   flex-wrap: wrap;
   align-items: end;
   gap: 16px;
-  padding: 14px 18px;
-  margin: 16px 0;
+  padding: 18px 20px;
+  margin: 20px 0;
+  border-radius: 16px;
 }
 .controls label:first-child {
   flex: 1;
@@ -141,7 +169,7 @@ label {
 }
 .status {
   border-radius: 20px;
-  background: #e8f7e6;
+  background: var(--green-soft);
   color: #176322;
   padding: 6px 10px;
   font-weight: bold;
@@ -152,7 +180,8 @@ label {
 }
 .notice {
   padding: 14px 18px;
-  border-radius: 10px;
+  border-radius: 13px;
+  border: 1px solid #cba35826;
   background: #fff3d6;
   color: #704900;
   font-size: 13px;
@@ -161,6 +190,7 @@ label {
 .notice.demo {
   background: #dceff7;
   color: #114f70;
+  border-color: #1263bd30;
 }
 .notice.error {
   background: #fde5e5;
@@ -168,12 +198,13 @@ label {
 }
 .readings-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr) minmax(150px, 0.55fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(180px, 0.7fr);
   gap: var(--panel-gap);
-  margin: 16px 0;
+  margin: 22px 0;
 }
 .panel h2 {
-  font-size: 19px;
+  font-size: 18px;
+  color: var(--green-dark);
   margin: 0 0 18px;
 }
 .panel-title {
@@ -193,8 +224,19 @@ label {
 }
 .soil-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+}
+.soil-panel {
+  background: linear-gradient(160deg, #ffffff, #f3f8f0);
+}
+.panel-title > .sensor-tag {
+  padding: 5px 9px;
+  border: 1px solid #d1e4d5;
+  border-radius: 20px;
+  color: #31593e;
+  background: #f5faf4;
+  font-size: 11px;
 }
 .environment-grid {
   display: grid;
@@ -214,13 +256,24 @@ label {
   color: var(--muted);
 }
 .metric-icon {
-  font-size: 36px;
-  color: #087d16;
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  font-size: 25px;
+  color: var(--green);
+  background: var(--green-soft);
+}
+.environment-grid > div:last-child .metric-icon {
+  background: #edf4fc;
+  color: #235f9a;
 }
 .environment strong {
   display: block;
-  font-size: 29px;
-  color: #087d16;
+  font-size: clamp(28px, 2.8vw, 38px);
+  letter-spacing: -1.2px;
+  color: var(--green-dark);
   white-space: nowrap;
 }
 .environment strong small {
@@ -243,12 +296,14 @@ label {
 }
 .rain {
   text-align: center;
+  background: linear-gradient(155deg, #f1f7fd, #ffffff 75%);
+  border-color: #dce6ef;
 }
 .rain-icon {
   display: block;
-  font-size: 64px;
+  font-size: 56px;
   color: #1263bd;
-  margin: 22px 0;
+  margin: 18px 0;
 }
 .rain strong {
   font-size: 18px;
@@ -260,11 +315,18 @@ label {
   color: var(--muted);
   line-height: 1.7;
 }
+.rain button {
+  margin-top: 10px;
+  background: #ffffff;
+  border-color: #b1cadc;
+  color: #1d5682;
+  border-radius: 11px;
+}
 .middle-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--panel-gap);
-  margin-bottom: 14px;
+  margin-bottom: 20px;
 }
 .irrigation {
   padding: 0;
@@ -272,7 +334,9 @@ label {
 }
 .irrigation-heading {
   padding: 22px;
-  background: linear-gradient(110deg, #174b36, #46845a);
+  background:
+    radial-gradient(ellipse at 100% 0, #c6d59720, transparent 65%),
+    linear-gradient(110deg, #143e30, #32664a);
   color: white;
 }
 .irrigation-heading .eyebrow {
@@ -280,6 +344,7 @@ label {
 }
 .irrigation-heading h2 {
   margin: 8px 0 0;
+  color: white;
 }
 .irrigation-body {
   display: flex;
@@ -325,7 +390,7 @@ label {
 }
 .bottom-grid {
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: var(--panel-gap);
   align-items: start;
 }
@@ -394,6 +459,7 @@ label {
     align-items: center;
     justify-content: space-between;
     gap: 15px;
+    flex-wrap: wrap;
   }
   .rain h2 {
     margin: 0;
@@ -426,7 +492,7 @@ label {
     grid-template-columns: 1fr;
   }
   .readings-grid {
-    grid-template-columns: 1.4fr 1fr;
+    grid-template-columns: 1fr 1fr;
   }
 }
 @media (max-width: 620px) {

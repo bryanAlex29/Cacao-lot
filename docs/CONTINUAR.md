@@ -1,5 +1,173 @@
 # Resumen para continuar CacaoSmart IoT
 
+## Ciudad y clima actual · cierre 2026-11-26
+
+La tarjeta Lluvia fue sustituida por Clima actual, sin botón de simulación.
+Ahora incorpora búsqueda/selección de ciudad dentro de la tarjeta; nombre completo,
+temperatura, sensación, humedad y precipitación modeladas por Open-Meteo.
+No modifica perfil ni sensores, no persiste elección de ciudad y no alimenta
+predicciones/reportes. [Uso, API y privacidad](current-weather-card.md).
+
+El usuario confirmó uso no comercial y activación local; solo el `.env` privado
+tiene `WEATHER_PROVIDER=open-meteo` y `WEATHER_NONCOMMERCIAL_CONFIRMED=true`.
+La plantilla mantiene proveedor desactivado para otras instalaciones.
+La consulta pública de Chone respondió con condiciones modeladas válidas.
+518 pruebas backend, 681 frontend, 24 integración clima y 117 scripts correctos,
+además de build/tipos/lint y navegador aislado a 1440/768/390 px.
+En la primera ejecución masiva paralela, un test de seguridad de dependencia agotó
+5 s al lanzar Node; la ejecución serial de las 117 pruebas pasó sin modificar
+el test ni relajar su límite. Los runners de integración desactivan expresamente
+ThingSpeak y clima externo, sin heredar workers habilitados del `.env` real.
+La entrega prepara código para GitHub, no despliegue ni validación de campo.
+
+## Cierre de formularios (punto 4) e inicio de operación local (punto 1)
+
+Nueva autorización: completar el punto 4 y después comenzar el 1; el 5 sigue
+excluido. No ampliar permisos, integrar OpenAI/correo ni cambiar datos privados.
+
+Formularios existentes revisados: validación de respuestas POST/PATCH/página de
+parcelas; borradores y bloqueo incierto; habilitación con identidad/estado
+confirmados e inventario validado posterior al fallo antes de otro cambio;
+alta de equipo también exige revisión exitosa y no comienza durante un GET.
+Clima valida `updated/cooldown` y no cancela escritura al actualizar. Login y
+registro tienen límite de 15 s; registro incierto orienta a probar login.
+Rangos, alertas y diagnóstico conservan sus protecciones existentes.
+384 backend y 642 Angular correctos; tipos/lint/build verificados.
+Ver [revisión y límites](software-review.md) para los intentos de navegador
+y el resultado de cierre, sin ocultar repeticiones fallidas.
+
+Punto 1: nueve pruebas de coordinación y rechazo de duplicado correcto.
+Supervisor separa los árboles de procesos, informa fallos de limpieza y no
+anuncia cierre correcto si falló. Ctrl+C real no está acreditado: el emisor
+experimental no pudo usar `AttachConsole` desde este host ni contra un Node
+mínimo. Se descartó ese script nuevo de ensayo, no se entregó como aprobado.
+Procedimiento interactivo y resultado del ensayo de salida de hijo en
+[uso local](LOCAL.md). Configuración/firmware/credenciales intactos.
+
+## Revisión de uso y pendientes sin circuito
+
+Usuario autorizó puntos 2/3/4 y excluyó arranque/cierre y entrega/publicación.
+Alta de parcelas: timeout, borrador, campos bloqueados al guardar y bloqueo de
+reenvío si resultado incierto hasta consultar correctamente la lista. No es
+idempotencia del servidor. Menú móvil: Escape con retorno de foco y cierre al
+seleccionar enlace, sin cambiar rutas/permisos. Matriz DERCAS actualizada para
+no marcar clima/predicción/respaldos existentes como ausentes.
+[Informe y backlog real](software-review.md). 384 backend, 623 Angular y 47 Edge
+correctos; lint/tipos/build correctos. Base temporal eliminada; principal intacta.
+Formato conserva pendiente LF/CRLF; sin cambios de firmware, OpenAI ni roles.
+
+## Simulaciones sintéticas verificadas
+
+Añadidos generador de 13 escenarios y `simulation:preview` offline (no envía
+datos) y pruebas contra el DTO real. [Guía](synthetic-simulations.md).
+Nueva integración procesa nueve lecturas únicas y 27 filas de sonda DEMO,
+rechaza inválidos/conflictos y conserva última lectura/origen.
+Ejecución aislada correcta: 1 prueba nueva con 13 pasos, 29 telemetría,
+22 tiempo real y 46 Edge; además 3 del generador, 10 simulador, 384 backend y
+614 Angular, tipos/lint/build/formato afectado/diff. Bases temporales eliminadas
+y clúster detenido. Cuenta principal, .env, hardware y OpenAI intactos.
+No equivale a validación de campo ni a un entrenamiento agrícola validado.
+
+## Alcance acordado: presentación local estudiantil
+
+El usuario aclaró que no requiere hosting/dominio ni infraestructura de
+producción. Conservar Neon y la configuración existente; ESP32/API key y OpenAI
+pospuestos. [Guía sencilla](LOCAL.md), `local:start` opcional para ambos servicios,
+`local:check` y `local:health`; respaldos solo manuales con comandos existentes.
+El lanzador rechaza puertos ocupados sin cerrar servicios ajenos y no activa
+red, tareas permanentes, simulador ni migraciones. Las plantillas `ops/` son
+referencia futura, no el objetivo de despliegue actual.
+Arranque desde cero autorizado y probado después: se corrigió búsqueda de
+nodemon mediante resolución desde el workspace backend. 7 pruebas de sesión y
+30 operativas pasan; API live/ready, login y proxy Angular ready devuelven 200.
+Servicios dejados activos; cierre interactivo Ctrl+C sigue pendiente de ensayo.
+
+## Preparación operativa antes de OpenAI
+
+Herramientas de revisión `ops:check`, `ops:health` y `ops:backup`, plantillas de
+entorno/proxy HTTPS en `ops/` y [guía operativa](operations.md). No despliegan,
+activan tareas ni conectan OpenAI. La inspección de respaldo detectó que el
+conjunto de 08:24 UTC conserva integridad/evidencia pero no incluye
+`prediction_model_versions`; no anunciarlo como copia del esquema actual.
+Resuelto con nuevo respaldo de 19:19 UTC:
+`.local/backups/bundle-2026-11-25T19-19-39.754Z-e01a0fd4577eea15`, 21 tablas y
+0 fotografías; restauración aislada e inspección de cobertura correctas,
+base temporal eliminada y principal intacta. 30 pruebas operativas, 384 backend,
+614 Angular, lint/tipos/build y salud local correctos. Copia externa nueva y
+programación no activadas.
+Hosting/dominio, confianza de proxy/IP, programación Neon, RPO/RTO, cifrado y
+retención siguen requiriendo decisión y verificación antes de producción.
+
+## Regresión múltiple — integración web experimental
+
+Añadidos registro local privado `prediction:publish`, versiones por
+propietario/parcela/equipo/sonda/origen, endpoint protegido `predictions/regression`
+y panel Angular con comparación y métricas. Entrenamiento exclusivamente offline;
+inferencias numéricas desde JSON validado, sin pickle ni procesos Python HTTP.
+Migración aditiva aplicada tras respaldo/restauración de prueba: 19 tablas
+anteriores intactas y cero modelos en la cuenta principal. No registrar fixtures
+en esa cuenta. Ver [guía actual](prediction-web-regression.md).
+La integración marcada como futura en secciones históricas inferiores ya está
+implementada; validación de campo, balance hídrico y litros siguen pendientes.
+
+## Predicción hídrica — primera entrega web experimental cerrada
+
+Disponible referencia de persistencia por sonda para el cierre del día UTC en
+curso, con corte de información a medianoche, gráfico/tabla, motivos de ausencia
+y MAE/RMSE/sesgo retrospectivos. No entrena por HTTP ni calcula litros, déficit,
+ahorro, fecha de riego o acciones de válvula. Mantiene la regresión múltiple
+offline como trabajo posterior de integración, no la sustituye.
+
+Validación: 377 backend, 609 Angular, 6 integración del endpoint, 26 del contrato
+previo y 45 Edge correctas. Capturas móvil/escritorio revisadas. Consulta actual
+DEMO: A/B/C sin dato del día previo recibido antes del corte; **No disponible**
+es el resultado correcto. Datos principales intactos; sin migraciones ni
+dependencias nuevas. Ver [guía y cierre](prediction-web-reference.md).
+Los estados de “solo cobertura” de secciones inferiores son históricos.
+
+## Preparación ESP32 sin hardware
+
+Añadidos [guía de conexión supervisada](ESP32_PREPARACION.md),
+[ficha sin credenciales](ESP32_FICHA_INTEGRACION.md), ejemplo JSON DEMO y
+`iot:check -- --demo` / `iot:check -- --input .local/ARCHIVO.json`.
+El comprobador usa el DTO real y la regla temporal compartida con HTTP,
+sin cargar `.env`, enviar datos o abrir PostgreSQL. Revalidación final correcta:
+23 pruebas del comprobador, 10 del simulador, 362 backend, 601 Angular,
+212 integración y 44 Edge; tipos/lint/build/formato afectado/diff/smoke correctos.
+La regla temporal se extrajo sin cambio de semántica para compartirla entre
+HTTP y comprobación offline.
+
+Bloqueos constatados, no modificados: API en `127.0.0.1:3100`, cuenta FARMER,
+solo equipo DEMO. El ESP32 no alcanzará ese loopback desde otra máquina;
+provisión REAL exige ADMIN propietario, sin acceso global a parcela ajena.
+Resolver red/transporte/propiedad con autorización y contrato auténtico antes
+de ingesta física. No se cambió firmware, riego, red, credenciales ni roles.
+
+## Últimos incrementos locales — exportación offline y respaldo periódico
+
+La descarga JSON autenticada ya está disponible en **Predicción hídrica →
+Exportar para evaluación offline**, con selección propia de equipo/origen,
+cuatro fechas UTC, validación del archivo, cancelación al cambiar selección y
+sin entrenamiento web. El usuario confirmó que la descarga funciona.
+Ver [API](prediction-offline-export.md) y
+[formulario y pruebas](prediction-offline-export-ui.md): 601 Angular y 44 Edge
+correctas en el cierre del formulario. La preparación de Python privado ya
+está validada; los pendientes de ejecución de las secciones inferiores son
+históricos, no bloqueos actuales.
+
+Implementado después `backup:periodic`: crea y verifica copias secuenciales
+en una base temporal, con bloqueo y sin borrado automático. **No se activó el
+modo periódico permanente ni se instaló una tarea de Windows.** Se ejecutó un
+ciclo único con 20 tablas y 0 fotografías, sin restaurar la principal.
+Ver [uso, evidencia y límites](periodic-backups.md). Sin nuevas dependencias,
+migraciones, cambios de credenciales, firmware o proveedores externos.
+Segundo punto autorizado: `backup:copy` copia conjuntos previamente verificados
+a un destino local explícito fuera del proyecto, con SHA-256, rechazo de
+sobrescrituras y marcador final. Se copió el conjunto reciente a
+`F:\CacaoSmart-Respaldos`, conservando el anterior; no se programó su actualización.
+Ver [prueba manual y guardas](external-backup-copy.md). Las pruebas de respaldo
+son 9 periódicas, 14 de copia, 8 anteriores y 1 integral correctas.
+
 ## Regresión múltiple offline — comparación experimental
 
 Implementados dataset independiente de dos retardos por sonda y entrenamiento Python/scikit-learn solo con train, con comparación frente a persistencia sobre las mismas filas de validación/prueba. Entorno privado `.local/prediction-python` instalado con hashes y `pip check` correcto, sin cambiar Python global ni npm. Nuevos comandos `prediction:regression:demo`, `prediction:regression`, `test:regression-python`, `test:regression-cli`. **6 pruebas TS y 12 Python correctas**, tipos/lint y demo correctos; validación final secuencial en segundo plano pendiente. Ver [alcance y reproducción](prediction-offline-regression.md). No habilita pronósticos web, litros o válvulas; sin datos principal, migraciones o proveedores externos. Trabajo local sin publicar.

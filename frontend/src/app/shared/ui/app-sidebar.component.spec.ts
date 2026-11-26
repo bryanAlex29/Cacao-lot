@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { provideRouter, RouterLink } from '@angular/router';
+import { provideRouter, Router, RouterLink } from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebarComponent } from './app-sidebar.component';
 import { IconComponent } from './icon.component';
@@ -75,5 +75,48 @@ describe('Navegación visual compartida', () => {
     const icon = fixture.debugElement.query(By.directive(IconComponent));
     expect(icon.nativeElement.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
     expect(icon.nativeElement.querySelector('svg').getAttribute('focusable')).toBe('false');
+  });
+
+  it('Escape cierra el menú expandido, devuelve foco y no emite una sección', async () => {
+    const fixture = await setup('dashboard', 'plot-1');
+    const selected = vi.fn();
+    fixture.componentInstance.sectionSelected.subscribe(selected);
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector('.menu-toggle');
+    button.click();
+    fixture.detectChanges();
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    fixture.nativeElement.querySelector('nav').dispatchEvent(event);
+    fixture.detectChanges();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+    expect(event.defaultPrevented).toBe(true);
+    expect(selected).not.toHaveBeenCalled();
+  });
+
+  it('Escape no se intercepta cuando el menú ya está cerrado', async () => {
+    const fixture = await setup();
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    fixture.nativeElement.querySelector('aside').dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('un clic en contenido de un enlace cierra el menú sin alterar rutas ni disparar sección', async () => {
+    const fixture = await setup('dashboard', 'plot-1');
+    const selected = vi.fn();
+    fixture.componentInstance.sectionSelected.subscribe(selected);
+    fixture.componentInstance.expanded.set(true);
+    fixture.detectChanges();
+    const anchor: HTMLAnchorElement = fixture.nativeElement.querySelector('nav a');
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    const content = anchor.querySelector('app-icon')!;
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    // Avoid router navigation in this unit test, while preserving the bubbling target.
+    anchor.addEventListener('click', (click) => click.preventDefault(), { once: true });
+    content.dispatchEvent(event);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.expanded()).toBe(false);
+    expect(selected).not.toHaveBeenCalled();
+    expect(anchor.getAttribute('href')).toBe('/parcelas/plot-1/dashboard');
   });
 });

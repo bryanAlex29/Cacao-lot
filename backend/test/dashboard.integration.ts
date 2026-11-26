@@ -22,6 +22,11 @@ import { SourcePolicy } from '../src/integrations/source-policy.service';
 import { PrivateImageStore } from '../src/ai-diagnostics/private-image.store';
 import { MoistureRepository } from '../src/alerts/moisture/moisture.repository';
 import type { SensorStatusEvent } from '@cacaosmart/contracts';
+import { parsePersistenceInput } from '../src/prediction/offline/persistence-input';
+import { syntheticRegressionRun } from './fixtures/regression-run';
+import { publicationsFromRun } from '../src/prediction/regression-artifact';
+import { registerRegressionPublication } from '../src/prediction/regression-registration';
+import { createHash } from 'node:crypto';
 
 describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → Angular', () => {
   let app: INestApplication;
@@ -232,7 +237,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     delete process.env['IMAGE_STORAGE_PATH'];
   });
 
-  it('login, DEMO explícita y tres tarjetas actualizadas por el simulador', async () => {
+  it('login y sensor 1 visible; contrato DEMO conserva las tres sondas del simulador', async () => {
     await page.goto(`${frontendUrl}/login`);
     await page.locator('#email').fill('browser@example.test');
     await page.locator('#password').fill(password);
@@ -262,9 +267,18 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     });
     expect(exit).toBe(0);
     await text('app-soil-sensor-card:nth-child(1)', '25');
-    await text('app-soil-sensor-card:nth-child(2)', '45');
-    await text('app-soil-sensor-card:nth-child(3)', '65');
-    expect(await page.locator('app-soil-history-chart path').count()).toBe(3);
+    expect(await page.locator('app-soil-sensor-card').count()).toBe(1);
+    expect(await page.locator('app-soil-history-chart path').count()).toBe(1);
+    const stored = await app.get(PrismaService).soilReading.findMany({
+      where: { reading: { deviceId, eventId: 'sim:browser:0' } },
+      select: { moisturePct: true, sensor: { select: { code: true } } },
+      orderBy: { sensor: { code: 'asc' } },
+    });
+    expect(stored.map((row) => [row.sensor.code, row.moisturePct])).toEqual([
+      ['soil_1', 25],
+      ['soil_2', 45],
+      ['soil_3', 65],
+    ]);
     await page.locator('app-page-header .connection-badge.healthy').waitFor();
     expect(await page.locator('app-page-header .connection-badge').textContent()).toContain('DEMO');
     expect(
@@ -471,10 +485,8 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
 
   it('FARMER ve rangos DEMO independientes, unidades y ausencia explícita sin formulario', async () => {
     await text('app-soil-sensor-card:nth-child(1) app-sensor-range', 'Mín. 0 %');
-    await text('app-soil-sensor-card:nth-child(2) app-sensor-range', 'Mín. 30 %');
-    await text('app-soil-sensor-card:nth-child(3) app-sensor-range', 'Sin rango configurado');
     await text('.environment app-sensor-range', 'Mín. 18 °C');
-    expect(await page.locator('app-sensor-range').count()).toBe(5);
+    expect(await page.locator('app-sensor-range').count()).toBe(3);
     expect(await page.locator('.rain app-sensor-range').count()).toBe(0);
     expect(
       await page.locator('app-sensor-range input, app-sensor-range-editor input').count(),
@@ -502,7 +514,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       expect(
         await page.locator('app-soil-sensor-card').first().locator('strong').textContent(),
       ).toContain('25');
-      await text('app-soil-sensor-card:nth-child(2) app-sensor-range', 'Mín. 30 %');
+      await text('.environment app-sensor-range', 'Mín. 18 °C');
     } finally {
       await page.unroute(pattern);
     }
@@ -538,8 +550,17 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
   it('lectura parcial conserva otras zonas, cero y feedback físico desconocido', async () => {
     await send('browser-partial', 0);
     await text('app-soil-sensor-card:nth-child(1)', '0');
-    await text('app-soil-sensor-card:nth-child(2)', '48');
-    await text('app-soil-sensor-card:nth-child(3)', 'Sin datos');
+    expect(await page.locator('app-soil-sensor-card').count()).toBe(1);
+    const stored = await app.get(PrismaService).soilReading.findMany({
+      where: { reading: { deviceId, eventId: 'browser-partial' } },
+      select: { moisturePct: true, sensor: { select: { code: true } } },
+      orderBy: { sensor: { code: 'asc' } },
+    });
+    expect(stored.map((row) => [row.sensor.code, row.moisturePct])).toEqual([
+      ['soil_1', 0],
+      ['soil_2', 48],
+      ['soil_3', null],
+    ]);
     await text('.irrigation', 'Orden de apertura');
     await text('.irrigation-metrics', 'No disponible');
   });
@@ -582,7 +603,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     expect(await page.getByRole('navigation', { name: 'Navegación principal' }).isVisible()).toBe(
       false,
     );
-    expect(await page.locator('app-soil-sensor-card').count()).toBe(3);
+    expect(await page.locator('app-soil-sensor-card').count()).toBe(1);
     await page.screenshot({ path: join(directory, 'dashboard-mobile.png'), fullPage: true });
     expect(errors).toEqual([]);
     console.log(`Capturas sintéticas de prueba: ${directory}`);
@@ -745,7 +766,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     }
   });
 
-  it('Socket.IO actualiza clasificación de cinco sensores sin inferir calibración o rangos ausentes', async () => {
+  it('Socket.IO actualiza sensor 1 y ambiente sin inferir calibración', async () => {
     const response = await fetch(`${apiUrl}/api/v1/iot/telemetry`, {
       method: 'POST',
       headers: {
@@ -769,12 +790,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await page
       .locator('app-soil-sensor-card:nth-child(1) .assessment[data-comparison="high"]')
       .waitFor();
-    await page
-      .locator('app-soil-sensor-card:nth-child(2) .assessment[data-comparison="low"]')
-      .waitFor();
-    await page
-      .locator('app-soil-sensor-card:nth-child(3) .assessment[data-comparison="unconfigured"]')
-      .waitFor();
+    expect(await page.locator('app-soil-sensor-card').count()).toBe(1);
     await page
       .locator('.environment app-sensor-assessment')
       .nth(0)
@@ -799,6 +815,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await page.screenshot({ path: join(directory, 'classification-mobile.png'), fullPage: true });
   });
 
+  // Includes several serialized SQL/REST round trips when PostgreSQL is remote.
   it('guardar un rango reclasifica la lectura actual sin crear otra lectura ni tocar el histórico', async () => {
     const response = await fetch(`${apiUrl}/api/v1/iot/telemetry`, {
       method: 'POST',
@@ -840,7 +857,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       fullPage: true,
     });
     expect(errors).toEqual([]);
-  });
+  }, 60000);
 
   it('el gráfico conserva el rango vigente al medir y añade otra vigencia solo al llegar datos posteriores', async () => {
     const chart = adminPage.locator('app-soil-history-chart');
@@ -890,7 +907,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     expect(endOld).toBeCloseTo(startNew, 5);
     expect(startNew).toBeGreaterThan(45);
     expect(startNew).toBeLessThan(665);
-    expect(await chart.locator('svg path').count()).toBe(3);
+    expect(await chart.locator('svg path').count()).toBe(1);
     expect(await app.get(PrismaService).reading.count({ where: { deviceId: adminDeviceId } })).toBe(
       before + 1,
     );
@@ -933,7 +950,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
         .getByText('Zona A · Rangos históricos no disponibles', { exact: false })
         .waitFor();
       expect(await chart.locator('line[data-sensor="soil_1"]').count()).toBe(0);
-      expect(await chart.locator('svg path').count()).toBe(3);
+      expect(await chart.locator('svg path').count()).toBe(1);
       expect(
         await adminPage.locator('app-soil-sensor-card').first().locator('strong').textContent(),
       ).toContain('40');
@@ -1016,7 +1033,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       .getByText('Zona A · Sin rango configurado en este periodo', { exact: false })
       .waitFor({ timeout: 7000 });
     expect(await chart.locator('line[data-threshold]').count()).toBe(0);
-    expect(await chart.locator('svg path').count()).toBe(3);
+    expect(await chart.locator('svg path').count()).toBe(1);
     expect(
       await adminPage.locator('app-soil-sensor-card').first().locator('strong').textContent(),
     ).toContain('40');
@@ -1114,7 +1131,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       await panel.getByRole('alert').waitFor();
       expect(await panel.textContent()).not.toContain('Sin alertas de desconexión registradas');
       await text('app-soil-sensor-card:nth-child(1) strong', '45');
-      expect(await page.locator('app-soil-history-chart svg path').count()).toBe(3);
+      expect(await page.locator('app-soil-history-chart svg path').count()).toBe(1);
     } finally {
       await page.unroute(pattern);
     }
@@ -1133,7 +1150,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     adminPage.setDefaultTimeout(7000);
     const db = app.get(PrismaService);
     const panel = adminPage.locator('app-moisture-alerts-panel');
-    await panel.getByText('Configuración de alertas A/B/C', { exact: true }).click();
+    await panel.getByText('Configuración de alertas · Sensor 1', { exact: true }).click();
     const policy = panel.locator('app-moisture-policy').first();
     await policy.getByRole('button', { name: 'Consultar política', exact: true }).click();
     await policy.getByText('Inhabilitada: falta configurar el margen.', { exact: true }).waitFor();
@@ -1797,13 +1814,34 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       await manager
         .getByRole('button', { name: 'Deshabilitar browser-management', exact: true })
         .click();
+      const toggleRoute = `**/api/v1/plots/${createdPlot.id}/devices/${registered.id}`;
+      const inventoryRoute = `**/api/v1/plots/${createdPlot.id}/devices?*`;
+      let toggleAttempts = 0;
+      await managementPage.route(toggleRoute, async (route) => {
+        toggleAttempts++;
+        const committed = await route.fetch();
+        expect(committed.status()).toBe(200);
+        await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+      });
+      await managementPage.route(inventoryRoute, (route) =>
+        route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+      );
       const disabling = managementPage.waitForResponse(
         (r) => r.url().endsWith(`/devices/${registered.id}`) && r.request().method() === 'PATCH',
       );
       await manager
         .getByRole('button', { name: 'Confirmar cambio de habilitación', exact: true })
         .click();
-      expect((await disabling).status()).toBe(200);
+      expect((await disabling).status()).toBe(503);
+      await manager.getByText('No se confirmó el cambio.', { exact: false }).waitFor();
+      await card.getByRole('button', { name: 'Reintentar dispositivos', exact: true }).waitFor();
+      expect(toggleAttempts).toBe(1);
+      expect((await db.device.findUniqueOrThrow({ where: { id: registered.id } })).isActive).toBe(
+        false,
+      );
+      await managementPage.unroute(toggleRoute);
+      await managementPage.unroute(inventoryRoute);
+      await card.getByRole('button', { name: 'Reintentar dispositivos', exact: true }).click();
       await manager
         .getByRole('button', { name: 'Habilitar browser-management', exact: true })
         .waitFor();
@@ -2147,7 +2185,10 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       const local = async (date: Date) =>
         filterPage.evaluate((value) => {
           const d = new Date(value);
-          return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
+          return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 19)
+            .replace(/:00$/, '');
         }, date.toISOString());
       const fromInput = history.getByLabel('Desde del diagnóstico (hora local)', { exact: true });
       const toInput = history.getByLabel('Hasta del diagnóstico (hora local)', { exact: true });
@@ -2420,6 +2461,73 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await text('main', 'No hay dispositivos disponibles');
     expect(errors).toEqual([]);
   });
+  it('móvil y teclado cierran el menú; crear con respuesta perdida exige revisar y no duplica parcela', async () => {
+    // Share the live cookie jar: copying a rotating refresh cookie invalidates
+    // the original context on its next refresh and cascades failures to later tests.
+    const ux = await page.context().newPage();
+    await ux.setViewportSize({ width: 390, height: 844 });
+    ux.setDefaultTimeout(7000);
+    let step = 'acceso';
+    try {
+      await ux.goto(`${frontendUrl}/parcelas`);
+      await ux.getByRole('heading', { name: 'Registrar una parcela propia' }).waitFor();
+      const menu = ux.getByRole('button', { name: 'Menú', exact: true });
+      step = 'abrir menú y Escape';
+      await menu.click();
+      await ux.locator('nav.expanded').waitFor({ state: 'visible' });
+      await ux.locator('nav a').first().focus();
+      await ux.keyboard.press('Escape');
+      await ux.waitForFunction(
+        () => document.querySelector('.menu-toggle')?.getAttribute('aria-expanded') === 'false',
+      );
+      expect(await menu.getAttribute('aria-expanded')).toBe('false');
+      expect(await menu.evaluate((element) => document.activeElement === element)).toBe(true);
+      step = 'cerrar menú al navegar';
+      await menu.click();
+      await ux.getByRole('link', { name: 'Parcelas', exact: true }).click();
+      expect(await menu.getAttribute('aria-expanded')).toBe('false');
+      const db = app.get(PrismaService);
+      const owner = await db.user.findUniqueOrThrow({ where: { email: 'browser@example.test' } });
+      const before = await db.plot.count({ where: { ownerId: owner.id } });
+      let posts = 0;
+      await ux.route('**/api/v1/plots', async (route) => {
+        if (route.request().method() !== 'POST') return route.continue();
+        posts++;
+        const committed = await route.fetch();
+        expect(committed.status()).toBe(201);
+        // Simulate a lost acknowledgment after the server has actually committed.
+        await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+      });
+      await ux.getByLabel('Nombre', { exact: true }).fill('Cacao · Confirmación perdida');
+      await ux.getByLabel('Ubicación', { exact: true }).fill('Datos sintéticos de interfaz');
+      const create = ux.getByRole('button', { name: 'Crear parcela', exact: true });
+      step = 'enviar con confirmación perdida';
+      await create.click();
+      await ux.getByText('No se confirmó la creación.', { exact: false }).waitFor();
+      expect(await create.isDisabled()).toBe(true);
+      expect(await ux.getByLabel('Nombre', { exact: true }).inputValue()).toBe(
+        'Cacao · Confirmación perdida',
+      );
+      await create.evaluate((button: HTMLButtonElement) => button.click());
+      expect(posts).toBe(1);
+      step = 'consultar lista antes de otro envío';
+      await ux.getByRole('button', { name: 'Actualizar', exact: true }).click();
+      await ux
+        .getByRole('heading', { name: 'Cacao · Confirmación perdida', exact: true })
+        .waitFor();
+      expect(await create.isEnabled()).toBe(true);
+      expect(await db.plot.count({ where: { ownerId: owner.id } })).toBe(before + 1);
+      expect(posts).toBe(1);
+      expect(await ux.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await ux.screenshot({ path: join(directory, 'uncertain-plot-mobile.png'), fullPage: true });
+    } catch (error) {
+      throw new Error(`Falló el recorrido móvil en: ${step}`, { cause: error });
+    } finally {
+      await ux.close();
+    }
+  });
   it('barra lateral permanece visible al bajar en escritorio y permite recorrer el menú en pantalla baja', async () => {
     const checkSticky = async (selector: string) => {
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -2485,7 +2593,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     await page.getByRole('link', { name: 'Monitoreo', exact: true }).click();
     await page.waitForURL(`**/parcelas/${plotId}/dashboard#readings`);
     await page.locator('app-soil-sensor-card').first().waitFor();
-    expect(await page.locator('app-soil-sensor-card').count()).toBe(3);
+    expect(await page.locator('app-soil-sensor-card').count()).toBe(1);
     expect(errors).toEqual([]);
   });
   it('estado del sistema distingue fallo parcial, evita reintentos simultáneos y recupera salud', async () => {
@@ -2636,7 +2744,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
     }
   });
 
-  it('predicción muestra cobertura DEMO real de API sin pronósticos, con selección y navegación accesible móvil', async () => {
+  it('predicción muestra cobertura y descarga JSON DEMO privado sin entrenar, con errores y navegación móvil', async () => {
     const predictionPage = await page.context().newPage();
     const unexpected: string[] = [];
     predictionPage.on('request', (request) => {
@@ -2656,13 +2764,87 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       expect(await predictionPage.locator('article').count()).toBe(0);
       await predictionPage.getByLabel('Equipo', { exact: true }).selectOption(deviceId);
       await predictionPage.locator('.source.demo').waitFor();
-      expect(await predictionPage.locator('article').count()).toBe(3);
+      expect(await predictionPage.locator('article').count()).toBe(1);
       expect(await predictionPage.locator('main').textContent()).toContain(
-        'modelo no implementado',
+        'sin validación de campo',
       );
       expect(await predictionPage.locator('main').textContent()).toContain('30 días completos UTC');
       expect(await predictionPage.locator('nav a[aria-current="page"]').count()).toBe(1);
       expect(await predictionPage.locator('app-page-header .connection').count()).toBe(0);
+      const panel = predictionPage.locator('app-offline-export');
+      const to = new Date(Math.floor(Date.now() / 86400000) * 86400000);
+      const day = (offset: number) =>
+        new Date(to.getTime() + offset * 86400000).toISOString().slice(0, 10);
+      await panel.getByLabel('Desde (UTC)', { exact: true }).fill(day(-30));
+      await panel.getByLabel('Fin de entrenamiento (UTC)', { exact: true }).fill(day(-20));
+      await panel.getByLabel('Fin de validación (UTC)', { exact: true }).fill(day(-10));
+      await panel.getByLabel('Hasta exclusivo (UTC)', { exact: true }).fill(day(0));
+      const button = panel.getByRole('button', {
+        name: 'Descargar JSON para evaluación offline',
+        exact: true,
+      });
+      let downloads = 0;
+      predictionPage.on('download', () => downloads++);
+      const pendingDownload = predictionPage.waitForEvent('download');
+      await button.click();
+      const download = await pendingDownload;
+      expect(download.suggestedFilename()).toBe(
+        `cacaosmart-offline-demo-${deviceId}-${day(-30)}-${day(0)}.json`,
+      );
+      const target = join(directory, 'offline-demo.json');
+      await download.saveAs(target);
+      const contents = await readFile(target, 'utf8');
+      const exported = parsePersistenceInput(JSON.parse(contents));
+      expect(exported).toMatchObject({
+        plotId,
+        deviceId,
+        source: 'demo',
+        from: day(-30),
+        trainUntil: day(-20),
+        validationUntil: day(-10),
+        toExclusive: day(0),
+      });
+      expect(contents).not.toMatch(
+        /passwordHash|credentialHash|accessToken|refreshHash|calibrationMetadata/,
+      );
+      await panel.getByRole('status').waitFor();
+      const count = await app.get(PrismaService).reading.count();
+      await panel.getByLabel('Fin de entrenamiento (UTC)', { exact: true }).fill(day(-30));
+      await button.click();
+      await panel.getByRole('alert').filter({ hasText: 'Desde <' }).waitFor();
+      expect(downloads).toBe(1);
+      await panel.getByLabel('Fin de entrenamiento (UTC)', { exact: true }).fill(day(-20));
+      const exportRoute = '**/predictions/offline-input.json*';
+      await predictionPage.route(
+        exportRoute,
+        (route) => route.fulfill({ status: 413, contentType: 'application/json', body: '{}' }),
+        { times: 1 },
+      );
+      await button.click();
+      await panel
+        .getByRole('alert')
+        .filter({ hasText: 'No se descargó un archivo parcial' })
+        .waitFor();
+      expect(await panel.getByLabel('Desde (UTC)', { exact: true }).inputValue()).toBe(day(-30));
+      expect(downloads).toBe(1);
+      await predictionPage.route(
+        exportRoute,
+        (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ...exported, deviceId: randomUUID() }),
+          }),
+        { times: 1 },
+      );
+      await button.click();
+      await panel.getByRole('alert').filter({ hasText: 'archivo compatible' }).waitFor();
+      expect(downloads).toBe(1);
+      const retryDownload = predictionPage.waitForEvent('download');
+      await button.click();
+      await (await retryDownload).saveAs(join(directory, 'offline-demo-retry.json'));
+      expect(downloads).toBe(2);
+      expect(await app.get(PrismaService).reading.count()).toBe(count);
       for (const width of [320, 390, 768, 1440]) {
         await predictionPage.setViewportSize({ width, height: 1000 });
         expect(
@@ -2683,6 +2865,159 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       await predictionPage.close();
     }
   });
+
+  it('referencia experimental muestra cero, gráficos, errores, corte UTC y móvil sin escribir lecturas', async () => {
+    const db = app.get(PrismaService);
+    const sensors = await db.sensor.findMany({
+      where: { deviceId, code: { in: ['soil_1', 'soil_2', 'soil_3'] } },
+    });
+    const cutoff = new Date();
+    cutoff.setUTCHours(0, 0, 0, 0);
+    for (const daysBefore of [3, 2, 1]) {
+      const time = new Date(cutoff.getTime() - (daysBefore - 1) * 86400000 - 100);
+      await db.reading.create({
+        data: {
+          deviceId,
+          eventId: `forecast-browser-${daysBefore}`,
+          source: 'demo',
+          payloadHash: 'c'.repeat(64),
+          recordedAt: time,
+          effectiveAt: time,
+          receivedAt: time,
+          timestampOrigin: 'device',
+          quality: {},
+          soilReadings: {
+            create: sensors.map((sensor) => ({
+              sensorId: sensor.id,
+              quality: 'valid',
+              moisturePct: sensor.code === 'soil_1' ? (daysBefore === 1 ? 0 : 20) : 60,
+            })),
+          },
+        },
+      });
+    }
+    const before = await db.reading.count();
+    const forecastPage = await page.context().newPage();
+    try {
+      await forecastPage.goto(`${frontendUrl}/parcelas/${plotId}/prediccion`);
+      await forecastPage.getByLabel('Equipo', { exact: true }).selectOption(deviceId);
+      await forecastPage.locator('.source.demo').waitFor();
+      const panel = forecastPage.locator('app-experimental-forecast');
+      const button = panel.getByRole('button', {
+        name: 'Consultar referencia experimental',
+        exact: true,
+      });
+      await button.click();
+      await panel.locator('.zone .value').first().filter({ hasText: '0 %' }).waitFor();
+      expect(await panel.locator('svg[role="img"]').count()).toBe(1);
+      expect(await panel.locator('table').count()).toBe(1);
+      expect(await panel.textContent()).toContain('sin validación de campo');
+      expect(await panel.textContent()).toContain('MAE (puntos porcentuales)');
+      expect(await panel.textContent()).toContain('Corte de información');
+      await forecastPage.route(
+        '**/predictions/experimental?*',
+        (route) => route.fulfill({ status: 503, body: '{}' }),
+        { times: 1 },
+      );
+      await button.click();
+      await panel.getByRole('alert').filter({ hasText: 'Reintenta' }).waitFor();
+      expect(await panel.locator('.zone').count()).toBe(0);
+      await button.click();
+      await panel.locator('.zone .value').first().filter({ hasText: '0 %' }).waitFor();
+      for (const width of [320, 390, 768, 1440]) {
+        await forecastPage.setViewportSize({ width, height: 1000 });
+        await panel
+          .locator('details')
+          .first()
+          .evaluate((element) => {
+            (element as HTMLDetailsElement).open = true;
+          });
+        expect(
+          await forecastPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+        if (width === 390 || width === 1440)
+          await forecastPage.screenshot({
+            path: join(directory, `experimental-forecast-${width}.png`),
+            fullPage: true,
+          });
+      }
+      await forecastPage.getByLabel('Equipo', { exact: true }).selectOption('');
+      await panel.locator('.zone').first().waitFor({ state: 'detached' });
+      expect(await db.reading.count()).toBe(before);
+    } finally {
+      await forecastPage.close();
+    }
+  }, 60000);
+
+  it('regresión registrada muestra estimación, persistencia, métricas y recuperación en móvil sin entrenar', async () => {
+    const db = app.get(PrismaService);
+    const plot = await db.plot.findUniqueOrThrow({ where: { id: plotId } });
+    const sensors = await db.sensor.findMany({
+      where: { deviceId, code: { in: ['soil_1', 'soil_2', 'soil_3'] } },
+    });
+    const cutoff = new Date();
+    cutoff.setUTCHours(0, 0, 0, 0);
+    const run = syntheticRegressionRun(
+      { plotId, deviceId, sensors },
+      new Date(cutoff.getTime() - 2 * 86400000),
+    );
+    await registerRegressionPublication(
+      db,
+      plot.ownerId,
+      publicationsFromRun(run.input, run.report, new Date()),
+      createHash('sha256').update(JSON.stringify(run.report)).digest('hex'),
+    );
+    const before = await db.reading.count();
+    const regressionPage = await page.context().newPage();
+    try {
+      await regressionPage.goto(`${frontendUrl}/parcelas/${plotId}/prediccion`);
+      await regressionPage.getByLabel('Equipo', { exact: true }).selectOption(deviceId);
+      await regressionPage.locator('.source.demo').waitFor();
+      const panel = regressionPage.locator('app-regression-forecast');
+      const button = panel.getByRole('button', {
+        name: 'Consultar regresión experimental',
+        exact: true,
+      });
+      await button.click();
+      await panel.locator('.zone .value').first().filter({ hasText: '10 %' }).waitFor();
+      expect(await panel.textContent()).toContain('Persistencia con las mismas entradas');
+      expect(await panel.textContent()).toContain('Sin validación de campo');
+      expect(await panel.textContent()).toContain('linear-two-lag-1.0.0');
+      await panel
+        .locator('details')
+        .first()
+        .evaluate((element) => {
+          (element as HTMLDetailsElement).open = true;
+        });
+      expect(await panel.locator('table').count()).toBe(2);
+      for (const width of [320, 390, 768, 1440]) {
+        await regressionPage.setViewportSize({ width, height: 1000 });
+        expect(
+          await regressionPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+        if (width === 390 || width === 1440)
+          await regressionPage.screenshot({
+            path: join(directory, `regression-forecast-${width}.png`),
+            fullPage: true,
+          });
+      }
+      await regressionPage.route(
+        '**/predictions/regression?*',
+        (route) => route.fulfill({ status: 503, body: '{}' }),
+        { times: 1 },
+      );
+      await button.click();
+      await panel.getByRole('alert').filter({ hasText: 'Reintenta' }).waitFor();
+      expect(await panel.locator('.zone').count()).toBe(0);
+      await button.click();
+      await panel.locator('.zone .value').first().filter({ hasText: '10 %' }).waitFor();
+      await regressionPage.getByLabel('Equipo', { exact: true }).selectOption('');
+      await panel.locator('.zone').first().waitFor({ state: 'detached' });
+      expect(await db.reading.count()).toBe(before);
+    } finally {
+      await regressionPage.close();
+    }
+  }, 60000);
 
   it('encabezado común soporta nombres largos en cinco pantallas y 320/390/768/1440 px', async () => {
     const db = app.get(PrismaService);

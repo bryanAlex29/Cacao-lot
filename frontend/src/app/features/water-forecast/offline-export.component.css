@@ -1,0 +1,101 @@
+:host {
+  display: block;
+  min-width: 0;
+  color: #183c2c;
+}
+.panel {
+  background: #fff;
+  border: 1px solid #dce6df;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 20px;
+  min-width: 0;
+}
+h2 {
+  margin-top: 0;
+  font-size: 1.15rem;
+}
+p {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 16px 0;
+}
+legend {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+label {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+  min-width: 0;
+}
+input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #768e7e;
+  border-radius: 8px;
+  font: inherit;
+  background: white;
+  color: inherit;
+}
+button {
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #276840;
+  border-radius: 8px;
+  background: #205334;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #08719c;
+  outline-offset: 3px;
+}
+.export-source {
+  background: #e8f5eb;
+  border-radius: 8px;
+  padding: 10px;
+  font-weight: 700;
+}
+.demo {
+  background: #fff2d4;
+  color: #62440c;
+}
+.error {
+  color: #942e27;
+}
+.help {
+  color: #486050;
+}
+summary {
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .panel {
+    padding: 16px;
+  }
+}

@@ -64,7 +64,10 @@ describe('Humedad: secuencias durables, política por sonda y aislamiento Postgr
       .post(`/api/v1/plots/${plotId}/moisture-alerts/${id}/acknowledge`)
       .auth(auth, { type: 'bearer' })
       .send({});
-  const sync = (sensor: string, now?: Date) =>
+  // Synthetic readings must not expire merely because a remote SQL round trip is slower.
+  // Explicit clocks in the stale/pause tests still exercise the real freshness rules.
+  const fixtureClocks = new Map<string, Date>();
+  const sync = (sensor: string, now = fixtureClocks.get(sensor)) =>
     repository.synchronize(sensor, (source) => app.get(SourcePolicy).allows(source), now);
   const fixture = async (source: 'real' | 'demo' = 'demo') => {
     const d = await device(source);
@@ -95,6 +98,7 @@ describe('Humedad: secuencias durables, política por sonda y aislamiento Postgr
     });
     let tick = 0;
     const base = Date.now() - 5000;
+    for (const item of soil) fixtureClocks.set(item.id, new Date(base + 5000));
     const sample = async (
       value: number | null,
       quality: 'valid' | 'uncalibrated' | 'invalid' | 'missing' = value === null

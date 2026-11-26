@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { PlotsComponent } from './plots.component';
 
@@ -51,7 +51,7 @@ describe('Parcelas propias', () => {
         locationLabel: 'Chone',
         areaM2: null,
       });
-      request.flush({});
+      request.flush({ id: 'new', name: 'Parcela', locationLabel: 'Chone', areaM2: null });
       http
         .expectOne('/api/v1/plots?limit=20&offset=0')
         .flush({ items: [], total: 0, limit: 20, offset: 0 });
@@ -69,7 +69,7 @@ describe('Parcelas propias', () => {
     component.create();
     const req = http.expectOne('/api/v1/plots');
     expect(req.request.body).toEqual({ name: 'Mi cacao', locationLabel: 'Chone', areaM2: 1500 });
-    req.flush({});
+    req.flush({ id: 'new', name: 'Mi cacao', locationLabel: 'Chone', areaM2: 1500 });
     http
       .expectOne('/api/v1/plots?limit=20&offset=0')
       .flush({ items: [], total: 0, limit: 20, offset: 0 });
@@ -142,5 +142,109 @@ describe('Parcelas propias', () => {
       .expectOne('/api/v1/plots?limit=20&offset=0')
       .flush({ items: [], total: 0, limit: 20, offset: 0 });
     http.verify();
+  });
+
+  it('marca texto de solo espacios como inválido sin enviar ni perder el borrador', async () => {
+    const { fixture, component, http } = await create('FARMER');
+    component.form.setValue({ name: '   ', locationLabel: '  ', areaM2: null });
+    component.create();
+    fixture.detectChanges();
+    expect(component.form.controls.name.invalid).toBe(true);
+    expect(component.form.controls.locationLabel.invalid).toBe(true);
+    expect(fixture.nativeElement.querySelector('input').getAttribute('aria-invalid')).toBe('true');
+    expect(fixture.nativeElement.querySelector('#create-validation').textContent).toContain(
+      'texto',
+    );
+    expect(component.form.controls.name.value).toBe('   ');
+    http.expectNone('/api/v1/plots');
+    http.verify();
+  });
+
+  it.each([{}, null, { id: 'new', name: 'Cacao', locationLabel: 'Chone', areaM2: -1 }])(
+    'respuesta de alta incompatible %j conserva borrador y no declara éxito',
+    async (body) => {
+      const { component, http } = await create('FARMER');
+      const draft = { name: 'Cacao', locationLabel: 'Chone', areaM2: null };
+      component.form.setValue(draft);
+      component.create();
+      http.expectOne('/api/v1/plots').flush(body);
+      expect(component.form.getRawValue()).toEqual(draft);
+      expect(component.message()).toBe('');
+      expect(component.uncertainCreate()).toBe(true);
+      component.create();
+      http.expectNone('/api/v1/plots');
+      component.load(0);
+      http
+        .expectOne('/api/v1/plots?limit=20&offset=0')
+        .flush({ items: [], total: -1, limit: 20, offset: 0 });
+      expect(component.uncertainCreate()).toBe(true);
+      expect(component.error()).not.toBe('');
+      http.verify();
+    },
+  );
+
+  it('bloquea edición durante envío y no inicia una actualización simultánea', async () => {
+    const { fixture, component, http } = await create('FARMER');
+    component.form.setValue({ name: 'Cacao', locationLabel: 'Chone', areaM2: null });
+    component.create();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('fieldset').disabled).toBe(true);
+    component.load(0);
+    http.expectNone('/api/v1/plots?limit=20&offset=0');
+    http.expectOne('/api/v1/plots').flush({}, { status: 400, statusText: 'Bad request' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('fieldset').disabled).toBe(false);
+    expect(component.uncertainCreate()).toBe(false);
+    http.verify();
+  });
+
+  it.each([0, 500, 503])(
+    'respuesta no confirmada %s conserva borrador y exige lectura correcta antes de otro POST',
+    async (status) => {
+      const { component, http } = await create('FARMER');
+      const draft = { name: 'Cacao', locationLabel: 'Chone', areaM2: 123 };
+      component.form.setValue(draft);
+      component.create();
+      const write = http.expectOne('/api/v1/plots');
+      if (status === 0) write.error(new ProgressEvent('error'));
+      else write.flush({}, { status, statusText: 'Unconfirmed' });
+      expect(component.uncertainCreate()).toBe(true);
+      expect(component.form.getRawValue()).toEqual(draft);
+      component.create();
+      http.expectNone('/api/v1/plots');
+      component.load(0);
+      http
+        .expectOne('/api/v1/plots?limit=20&offset=0')
+        .flush({}, { status: 503, statusText: 'Unavailable' });
+      expect(component.uncertainCreate()).toBe(true);
+      component.create();
+      http.expectNone('/api/v1/plots');
+      component.load(0);
+      http
+        .expectOne('/api/v1/plots?limit=20&offset=0')
+        .flush({ items: [], total: 0, limit: 20, offset: 0 });
+      expect(component.uncertainCreate()).toBe(false);
+      expect(component.form.getRawValue()).toEqual(draft);
+      http.verify();
+    },
+  );
+
+  it('un timeout no deja el formulario guardando indefinidamente ni permite reenvío', async () => {
+    const { component, http } = await create('FARMER');
+    vi.useFakeTimers();
+    try {
+      component.form.setValue({ name: 'Cacao', locationLabel: 'Chone', areaM2: null });
+      component.create();
+      const request = http.expectOne('/api/v1/plots');
+      vi.advanceTimersByTime(10001);
+      expect(request.cancelled).toBe(true);
+      expect(component.saving()).toBe(false);
+      expect(component.uncertainCreate()).toBe(true);
+      component.create();
+      http.expectNone('/api/v1/plots');
+      http.verify();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

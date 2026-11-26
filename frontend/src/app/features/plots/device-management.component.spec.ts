@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeviceManagementComponent } from './device-management.component';
 import { AuthService } from '../../core/auth/auth.service';
 import type { RegisteredDevice } from '../../core/devices/devices-api.service';
@@ -153,6 +153,51 @@ describe('Gestión segura de dispositivos propios', () => {
     component.setActive();
     http.expectNone(() => true);
     expect(component.error()).toContain('No se confirmó');
+  });
+  it('no permite alta durante lectura de inventario anterior al guardado', async () => {
+    const { fixture, component, http } = await setup();
+    fixture.componentRef.setInput('inventoryBusy', true);
+    fixture.detectChanges();
+    component.create();
+    http.expectNone(url);
+    expect(component.busy()).toBe(false);
+  });
+  it.each([{}, null, { ...device, id: 'other' }, device])(
+    'habilitación incompatible %j exige inventario nuevo antes de reabrir',
+    async (body) => {
+      const { fixture, component, http } = await setup();
+      component.target.set(device);
+      component.setActive();
+      http.expectOne(url + '/device').flush(body);
+      expect(component.uncertainToggle()).toBe(true);
+      component.openTarget(device, new Event('click'));
+      expect(component.target()).toBeNull();
+      component.target.set(device);
+      component.setActive();
+      http.expectNone(() => true);
+      fixture.componentRef.setInput('inventoryRevision', 1);
+      fixture.detectChanges();
+      expect(component.uncertainToggle()).toBe(false);
+    },
+  );
+  it('timeout de habilitación conserva bloqueo y no reenvía PATCH', async () => {
+    const { component, http } = await setup();
+    vi.useFakeTimers();
+    try {
+      component.target.set(device);
+      component.setActive();
+      const request = http.expectOne(url + '/device');
+      vi.advanceTimersByTime(15001);
+      expect(request.cancelled).toBe(true);
+      expect(component.busy()).toBe(false);
+      expect(component.uncertainToggle()).toBe(true);
+      component.openTarget(device, new Event('click'));
+      expect(component.target()).toBeNull();
+      component.setActive();
+      http.expectNone(() => true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('cambio de parcela cancela solicitud y elimina secretos y confirmación', async () => {
     const { fixture, component, http } = await setup();

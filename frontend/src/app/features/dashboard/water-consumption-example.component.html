@@ -1,0 +1,39 @@
+<div id="water-consumption-content" aria-live="polite">
+  @if (exampleOpen()) {
+    <div class="example" role="region" aria-label="Ejemplo ficticio de consumo y ahorro">
+      <span class="demo-badge">DEMO · Ejemplo ficticio</span>
+      <p class="disclaimer">No representa el consumo ni el ahorro real de esta parcela.</p>
+      <dl>
+        <div>
+          <dt>Consumo habitual del ejemplo</dt>
+          <dd>{{ example.usualLiters }} L</dd>
+        </div>
+        <div>
+          <dt>Consumo hipotético del ejemplo</dt>
+          <dd>{{ example.hypotheticalLiters }} L</dd>
+        </div>
+        <div class="savings">
+          <dt>Ahorro del ejemplo</dt>
+          <dd>
+            {{ savedLiters }} L <span>· {{ savedPercent }} %</span>
+          </dd>
+        </div>
+      </dl>
+      <p class="note">
+        Comparación ilustrativa, no calculada con el relé. No se guarda ni aparece en reportes.
+      </p>
+    </div>
+  } @else {
+    <p class="unavailable">Consumo <strong>No disponible</strong></p>
+    <p class="unavailable">Ahorro <strong>No calculable</strong></p>
+    <p class="note">Requiere caudal calibrado y línea base verificable.</p>
+  }
+</div>
+<button
+  type="button"
+  [attr.aria-expanded]="exampleOpen()"
+  aria-controls="water-consumption-content"
+  (click)="toggleExample()"
+>
+  {{ exampleOpen() ? 'Cerrar ejemplo' : 'Ver ejemplo' }}
+</button>

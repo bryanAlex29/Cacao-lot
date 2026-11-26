@@ -13,6 +13,9 @@ export interface Environment {
   IMAGE_RETENTION_DAYS: number;
   IMAGE_STORAGE_PATH?: string;
   WEATHER_PROVIDER: 'disabled' | 'open-meteo';
+  THINGSPEAK_CHANNEL_ID: string;
+  THINGSPEAK_READ_API_KEY: string;
+  THINGSPEAK_IMPORT_ENABLED: boolean;
 }
 
 export function validateEnvironment(input: Record<string, unknown>): Environment {
@@ -81,6 +84,19 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
     throw new Error('WEATHER_PROVIDER inválido');
   if (weather === 'open-meteo' && input['WEATHER_NONCOMMERCIAL_CONFIRMED'] !== 'true')
     throw new Error('Open-Meteo gratuito requiere WEATHER_NONCOMMERCIAL_CONFIRMED=true');
+  const thingSpeakChannel = String(input['THINGSPEAK_CHANNEL_ID'] ?? '');
+  const thingSpeakKey = String(input['THINGSPEAK_READ_API_KEY'] ?? '');
+  const thingSpeakEnabled = input['THINGSPEAK_IMPORT_ENABLED'] ?? 'false';
+  if (
+    (thingSpeakChannel !== '' && !/^[1-9]\d*$/.test(thingSpeakChannel)) ||
+    (thingSpeakKey !== '' && !/^[a-zA-Z0-9]{1,128}$/.test(thingSpeakKey)) ||
+    !['true', 'false'].includes(String(thingSpeakEnabled)) ||
+    (String(thingSpeakEnabled) === 'true' &&
+      (nodeEnv !== 'development' || thingSpeakChannel !== '3554501'))
+  )
+    throw new Error(
+      'Configuración ThingSpeak inválida; importación solo development y canal confirmado.',
+    );
   return {
     NODE_ENV: nodeEnv as Environment['NODE_ENV'],
     HOST: host,
@@ -95,6 +111,9 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
     AI_REQUEST_TIMEOUT_MS: bounded('AI_REQUEST_TIMEOUT_MS', 10000, 30000),
     IMAGE_RETENTION_DAYS: bounded('IMAGE_RETENTION_DAYS', 7, 30),
     WEATHER_PROVIDER: weather as Environment['WEATHER_PROVIDER'],
+    THINGSPEAK_CHANNEL_ID: thingSpeakChannel,
+    THINGSPEAK_READ_API_KEY: thingSpeakKey,
+    THINGSPEAK_IMPORT_ENABLED: String(thingSpeakEnabled) === 'true',
     ...(input['IMAGE_STORAGE_PATH']
       ? { IMAGE_STORAGE_PATH: String(input['IMAGE_STORAGE_PATH']) }
       : {}),

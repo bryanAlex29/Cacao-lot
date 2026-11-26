@@ -154,7 +154,7 @@ export class WeatherComponent {
     this.message.set('');
   }
   load(): void {
-    if (!this.id) return;
+    if (!this.id || this.busy()) return;
     this.begin();
     this.snapshot.set(null);
     this.plot.set(null);
@@ -262,6 +262,8 @@ export class WeatherComponent {
         .subscribe({
           next: (value) => {
             try {
+              if (!['updated', 'cooldown'].includes(value.status))
+                throw new Error('Estado de sincronización incompatible');
               this.accept(value);
               this.message.set(
                 value.status === 'cooldown'
@@ -269,6 +271,7 @@ export class WeatherComponent {
                   : 'Clima histórico sincronizado. No es un pronóstico ni una medición de tus sensores.',
               );
             } catch {
+              this.uncertain.set(true);
               this.error.set('Respuesta meteorológica incompatible; actualiza para verificar.');
             }
             this.busy.set(false);

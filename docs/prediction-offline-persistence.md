@@ -19,7 +19,7 @@ npm run test:prediction-cli
 npm run test --workspace=@cacaosmart/backend -- --runTestsByPath src/prediction/offline/persistence.spec.ts
 ```
 
-El primer comando genera una fixture determinista **DEMO**, sin crear cuentas, parcelas, dispositivos o lecturas en la base. El segundo procesa únicamente un JSON local privado de esquema conocido. No exporta automáticamente datos de una cuenta: un exportador autenticado y autorizado queda para otro incremento.
+El primer comando genera una fixture determinista **DEMO**, sin crear cuentas, parcelas, dispositivos o lecturas en la base. El segundo procesa únicamente un JSON local privado de esquema conocido. No exporta automáticamente datos de una cuenta; la descarga autenticada y autorizada está disponible como incremento backend en el [exportador offline](prediction-offline-export.md).
 
 Cada ejecución genera un directorio nuevo `.local/prediction-runs/run-*` con:
 
@@ -87,7 +87,7 @@ No se presentan las métricas numéricas de la fixture como resultados del culti
 
 Los artefactos pueden contener datos privados, IDs y fechas. No copiarlos a Git, chat o rutas públicas. Los modos restrictivos de creación no sustituyen las ACL en Windows. No hay cifrado, firma ni política automática de retención; `complete.json` confirma escritura, no autenticidad criptográfica contra un atacante con acceso a toda la carpeta.
 
-La persistencia es la **referencia** para comparar una futura regresión múltiple, no un reemplazo de ella. Siguen pendientes: exportación autorizada desde datos reales, preparación de más variables sin fuga, entrenamiento offline Python/scikit-learn, evaluación fuera de muestra, balance hídrico con parámetros justificados, persistencia de modelos/predicciones y exposición web controlada. Ningún resultado de este script habilita el riego automático.
+La persistencia es la **referencia** para comparar la [regresión múltiple offline](prediction-offline-regression.md), no un reemplazo de ella. La [exportación autorizada por API](prediction-offline-export.md) permite preparar entradas desde lecturas propias. Siguen pendientes: preparación de más variables sin fuga, evaluación con datos de campo, balance hídrico con parámetros justificados, persistencia de modelos/predicciones y exposición web controlada. Ningún resultado de este script habilita el riego automático.
 
 ## Archivos
 

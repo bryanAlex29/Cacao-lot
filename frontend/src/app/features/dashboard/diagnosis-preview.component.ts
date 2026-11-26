@@ -59,15 +59,15 @@ import { IconComponent } from '../../shared/ui/icon.component';
         align-items: center;
       }
       .plant {
-        background: #e8f7e6;
-        color: #387e3e;
+        background: radial-gradient(ellipse at top, #e4efd7, #f5f9ef);
+        color: #396746;
         font-size: 40px;
         line-height: 1.1;
-        border-radius: 12px;
+        border-radius: 18px;
         padding: 24px 16px;
         min-width: 125px;
         text-align: center;
-        border: 1px solid #c8ddc4;
+        border: 1px solid #cfddc7;
       }
       .plant span {
         display: block;
@@ -88,7 +88,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
         font-size: 12px;
         padding: 11px 14px;
         min-height: 44px;
-        border-radius: 9px;
+        border-radius: 11px;
         background: var(--green);
         color: white;
         text-decoration: none;

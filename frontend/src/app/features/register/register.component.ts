@@ -81,7 +81,7 @@ export class RegisterComponent {
                 ? 'No se pudo crear esa cuenta. Si ya tienes una, inicia sesión.'
                 : error instanceof HttpErrorResponse && error.status === 400
                   ? 'Revisa los datos. La contraseña debe tener entre 8 y 128 caracteres, una mayúscula y un símbolo.'
-                  : 'No se pudo completar el registro. Revisa la conexión y vuelve a intentarlo.',
+                  : 'No se confirmó el registro; la cuenta podría haberse creado. Intenta iniciar sesión con el mismo correo antes de registrarte de nuevo.',
           );
         },
       });

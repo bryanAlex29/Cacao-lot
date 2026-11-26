@@ -8,6 +8,9 @@
     "start": "node dist/main.js",
     "start:dev": "nodemon --config nodemon.json",
     "test": "jest --runInBand",
+    "thingspeak:check": "node --env-file=../.env -r ts-node/register src/integrations/thingspeak-check.ts",
+    "thingspeak:provision": "ts-node src/integrations/thingspeak-provision.ts",
+    "thingspeak:import-once": "node --env-file=../.env -r ts-node/register src/integrations/thingspeak-import-once.ts",
     "prisma:generate": "prisma generate",
     "prisma:validate": "node --env-file=../.env ../node_modules/prisma/build/index.js validate",
     "prisma:migrate": "node --env-file=../.env ../node_modules/prisma/build/index.js migrate deploy"

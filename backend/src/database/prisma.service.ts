@@ -10,6 +10,10 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
     super({
       adapter: new PrismaPg({
         connectionString: config.get('DATABASE_URL', { infer: true }),
+        // The adapter serializes DateTime without an offset and normalizes returned
+        // timestamptz offsets as UTC. Every pooled session must therefore use UTC,
+        // independently of the PostgreSQL server's local timezone.
+        options: '-c timezone=UTC',
         connectionTimeoutMillis: 3000,
         query_timeout: 3000,
         max: 5,

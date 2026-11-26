@@ -13,72 +13,274 @@ import { WeatherService } from '../src/weather/weather.service';
 import { OpenMeteoProvider, normalizeWeather } from '../src/weather/open-meteo.provider';
 import { weatherFixture } from './weather-fixture';
 import { WeatherJob } from '../src/weather/weather.job';
+import { WeatherCitiesProvider } from '../src/weather/weather-cities.provider';
+import { CurrentWeatherProvider } from '../src/weather/current-weather.provider';
 
 describe('Clima ERA5 por parcela con persistencia aislada, sin red externa', () => {
   let app: INestApplication, db: PrismaService, service: WeatherService, config: ConfigService;
-  let owner: Awaited<ReturnType<typeof account>>, stranger: Awaited<ReturnType<typeof account>>, farmer: Awaited<ReturnType<typeof account>>;
+  let owner: Awaited<ReturnType<typeof account>>,
+    stranger: Awaited<ReturnType<typeof account>>,
+    farmer: Awaited<ReturnType<typeof account>>;
   const password = 'Weather-test!';
-  const profile = { latitude: 0, longitude: 0, timezone: 'America/Guayaquil', enabled: true, expectedVersion: 0 };
+  const profile = {
+    latitude: 0,
+    longitude: 0,
+    timezone: 'America/Guayaquil',
+    enabled: true,
+    expectedVersion: 0,
+  };
   let calls = 0;
+  const city = {
+    id: 3659139,
+    name: 'Chone',
+    region: 'Manabí',
+    country: 'Ecuador',
+    countryCode: 'EC',
+    latitude: -0.698,
+    longitude: -80.094,
+  };
+  const publicCity = {
+    id: city.id,
+    name: city.name,
+    region: city.region,
+    country: city.country,
+    countryCode: city.countryCode,
+  };
+  const citySearch = jest.fn(async () => [publicCity]);
+  const cityResolve = jest.fn(async () => city);
+  const currentRead = jest.fn(async () => ({
+    provider: 'Open-Meteo',
+    quality: 'modeled',
+    observedAt: new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
+    temperatureC: 26,
+    apparentTemperatureC: 28,
+    humidityPct: 80,
+    precipitationMm: 0,
+    intervalSeconds: 900,
+    weatherCode: 3,
+    isDay: true,
+  }));
   async function account(role: 'ADMIN' | 'FARMER') {
-    const user = await db.user.create({ data: { email: `${randomUUID()}@example.test`, name: 'Clima sintético', role,
-      passwordHash: await app.get(PasswordService).hash(password) } });
-    const plot = await db.plot.create({ data: { ownerId: user.id, name: 'Clima de prueba', locationLabel: 'Sin ubicación real' } });
-    return { user, plot, token: (await app.get(AuthService).login({ email: user.email, password })).body.accessToken };
+    const user = await db.user.create({
+      data: {
+        email: `${randomUUID()}@example.test`,
+        name: 'Clima sintético',
+        role,
+        passwordHash: await app.get(PasswordService).hash(password),
+      },
+    });
+    const plot = await db.plot.create({
+      data: { ownerId: user.id, name: 'Clima de prueba', locationLabel: 'Sin ubicación real' },
+    });
+    return {
+      user,
+      plot,
+      token: (await app.get(AuthService).login({ email: user.email, password })).body.accessToken,
+    };
   }
   const path = (id: string) => `/api/v1/plots/${id}/weather`;
   beforeAll(async () => {
     const name = new URL(process.env['DATABASE_URL'] ?? '').pathname.slice(1);
-    if (!/^cacaosmart_test_[a-f0-9]{16}$/.test(name) || name !== process.env['TEST_DATABASE_NAME']) throw new Error('Solo base temporal');
+    if (!/^cacaosmart_test_[a-f0-9]{16}$/.test(name) || name !== process.env['TEST_DATABASE_NAME'])
+      throw new Error('Solo base temporal');
     process.env['WEATHER_PROVIDER'] = 'disabled';
-    const module = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(OpenMeteoProvider).useValue({
-      fetch: async (location: typeof profile, from: string, to: string) => {
-        calls++;
-        return normalizeWeather(weatherFixture(from, to, location.timezone), location, from, to);
-      },
-    }).compile();
+    const module = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(OpenMeteoProvider)
+      .useValue({
+        fetch: async (location: typeof profile, from: string, to: string) => {
+          calls++;
+          return normalizeWeather(weatherFixture(from, to, location.timezone), location, from, to);
+        },
+      })
+      .overrideProvider(WeatherCitiesProvider)
+      .useValue({ search: citySearch, resolve: cityResolve })
+      .overrideProvider(CurrentWeatherProvider)
+      .useValue({ read: currentRead })
+      .compile();
     app = module.createNestApplication({ logger: false });
-    configureApp(app); await app.init();
-    db = app.get(PrismaService); service = app.get(WeatherService); config = app.get(ConfigService);
-    owner = await account('ADMIN'); stranger = await account('ADMIN'); farmer = await account('FARMER');
+    configureApp(app);
+    await app.init();
+    db = app.get(PrismaService);
+    service = app.get(WeatherService);
+    config = app.get(ConfigService);
+    owner = await account('ADMIN');
+    stranger = await account('ADMIN');
+    farmer = await account('FARMER');
   });
-  afterAll(async () => { if (app) await app.close(); delete process.env['WEATHER_PROVIDER']; });
-  afterEach(() => { jest.restoreAllMocks(); config.set('WEATHER_PROVIDER', 'disabled'); });
+  afterAll(async () => {
+    if (app) await app.close();
+    delete process.env['WEATHER_PROVIDER'];
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    config.set('WEATHER_PROVIDER', 'disabled');
+  });
   it('JWT, propiedad incluso ADMIN y FARMER lectura propia sin escrituras', async () => {
     await request(app.getHttpServer()).get(path(owner.plot.id)).expect(401);
-    await request(app.getHttpServer()).get(path(owner.plot.id)).auth(stranger.token, { type: 'bearer' }).expect(404);
-    await request(app.getHttpServer()).put(path(owner.plot.id) + '/profile').auth(farmer.token, { type: 'bearer' }).send(profile).expect(403);
-    await request(app.getHttpServer()).post(path(farmer.plot.id) + '/sync').auth(farmer.token, { type: 'bearer' }).send({}).expect(403);
-    const empty = await request(app.getHttpServer()).get(path(farmer.plot.id)).auth(farmer.token, { type: 'bearer' }).expect(200);
-    expect(empty.body).toMatchObject({ provider: 'disabled', profile: null, items: [], provenance: null });
+    await request(app.getHttpServer())
+      .get(path(owner.plot.id))
+      .auth(stranger.token, { type: 'bearer' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .put(path(owner.plot.id) + '/profile')
+      .auth(farmer.token, { type: 'bearer' })
+      .send(profile)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(path(farmer.plot.id) + '/sync')
+      .auth(farmer.token, { type: 'bearer' })
+      .send({})
+      .expect(403);
+    const empty = await request(app.getHttpServer())
+      .get(path(farmer.plot.id))
+      .auth(farmer.token, { type: 'bearer' })
+      .expect(200);
+    expect(empty.body).toMatchObject({
+      provider: 'disabled',
+      profile: null,
+      items: [],
+      provenance: null,
+    });
+  });
+  it('city lookup requires JWT and ownership even for ADMIN, without calling external providers', async () => {
+    citySearch.mockClear();
+    cityResolve.mockClear();
+    currentRead.mockClear();
+    for (const suffix of ['/cities?name=Chone', `/current?cityId=${city.id}`]) {
+      await request(app.getHttpServer())
+        .get(path(owner.plot.id) + suffix)
+        .expect(401);
+      await request(app.getHttpServer())
+        .get(path(owner.plot.id) + suffix)
+        .auth(stranger.token, { type: 'bearer' })
+        .expect(404);
+    }
+    expect(citySearch).not.toHaveBeenCalled();
+    expect(cityResolve).not.toHaveBeenCalled();
+    expect(currentRead).not.toHaveBeenCalled();
+  });
+  it('disabled service never geocodes or sends city coordinates', async () => {
+    citySearch.mockClear();
+    currentRead.mockClear();
+    const result = await request(app.getHttpServer())
+      .get(path(farmer.plot.id) + '/cities?name=Chone')
+      .auth(farmer.token, { type: 'bearer' })
+      .expect(200);
+    expect(result.body).toMatchObject({ status: 'disabled', items: [] });
+    await request(app.getHttpServer())
+      .get(path(farmer.plot.id) + `/current?cityId=${city.id}`)
+      .auth(farmer.token, { type: 'bearer' })
+      .expect(200);
+    expect(citySearch).not.toHaveBeenCalled();
+    expect(currentRead).not.toHaveBeenCalled();
+  });
+  it('FARMER can search/select a reference city without profile, persistence or permission escalation', async () => {
+    config.set('WEATHER_PROVIDER', 'open-meteo');
+    const counts = {
+      profiles: await db.weatherProfile.count(),
+      revisions: await db.weatherProfileRevision.count(),
+      batches: await db.weatherBatch.count(),
+      observations: await db.weatherObservation.count(),
+    };
+    const results = await request(app.getHttpServer())
+      .get(path(farmer.plot.id) + '/cities?name=Chone')
+      .auth(farmer.token, { type: 'bearer' })
+      .expect(200);
+    expect(results.body).toEqual({
+      plotId: farmer.plot.id,
+      status: 'available',
+      items: [publicCity],
+    });
+    const weather = await request(app.getHttpServer())
+      .get(path(farmer.plot.id) + `/current?cityId=${city.id}`)
+      .auth(farmer.token, { type: 'bearer' })
+      .expect(200);
+    expect(weather.body).toMatchObject({
+      city: publicCity,
+      current: { temperatureC: 26, precipitationMm: 0 },
+    });
+    expect(weather.body.city).not.toHaveProperty('latitude');
+    expect(cityResolve).toHaveBeenCalledWith(city.id);
+    expect(currentRead).toHaveBeenCalledWith(city);
+    expect(await db.weatherProfile.count()).toBe(counts.profiles);
+    expect(await db.weatherProfileRevision.count()).toBe(counts.revisions);
+    expect(await db.weatherBatch.count()).toBe(counts.batches);
+    expect(await db.weatherObservation.count()).toBe(counts.observations);
+    expect((await db.plot.findUniqueOrThrow({ where: { id: farmer.plot.id } })).locationLabel).toBe(
+      'Sin ubicación real',
+    );
+  });
+  it.each([
+    '/cities?name=a',
+    '/cities?name=Chone&ownerId=x',
+    '/current?cityId=-1',
+    '/current?cityId=1.5',
+    '/current?cityId=42&latitude=0',
+    '/current?cityId=1&cityId=2',
+  ])('validates city queries and rejects client coordinates/identity (%s)', async (suffix) => {
+    await request(app.getHttpServer())
+      .get(path(farmer.plot.id) + suffix)
+      .auth(farmer.token, { type: 'bearer' })
+      .expect(400);
   });
   it('guardar autorización no llama al proveedor, versiona y audita sin alterar parcelas', async () => {
-    await request(app.getHttpServer()).put(path(owner.plot.id) + '/profile').auth(owner.token, { type: 'bearer' }).send(profile).expect(200);
+    await request(app.getHttpServer())
+      .put(path(owner.plot.id) + '/profile')
+      .auth(owner.token, { type: 'bearer' })
+      .send(profile)
+      .expect(200);
     expect(calls).toBe(0);
     expect(await db.weatherProfileRevision.count()).toBe(1);
-    expect((await db.plot.findUniqueOrThrow({ where: { id: owner.plot.id } })).locationLabel).toBe('Sin ubicación real');
-    await request(app.getHttpServer()).post(path(owner.plot.id) + '/sync').auth(owner.token, { type: 'bearer' }).send({}).expect(503);
+    expect((await db.plot.findUniqueOrThrow({ where: { id: owner.plot.id } })).locationLabel).toBe(
+      'Sin ubicación real',
+    );
+    await request(app.getHttpServer())
+      .post(path(owner.plot.id) + '/sync')
+      .auth(owner.token, { type: 'bearer' })
+      .send({})
+      .expect(503);
     expect(calls).toBe(0);
   });
-  it.each([{ latitude: '0' }, { longitude: 181 }, { enabled: null }, { timezone: 'UTC' }, { ownerId: 'client' }])('valida perfil sin suplantación %j', async (extra) => {
-    await request(app.getHttpServer()).put(path(owner.plot.id) + '/profile').auth(owner.token, { type: 'bearer' })
-      .send({ ...profile, ...extra }).expect(400);
+  it.each([
+    { latitude: '0' },
+    { longitude: 181 },
+    { enabled: null },
+    { timezone: 'UTC' },
+    { ownerId: 'client' },
+  ])('valida perfil sin suplantación %j', async (extra) => {
+    await request(app.getHttpServer())
+      .put(path(owner.plot.id) + '/profile')
+      .auth(owner.token, { type: 'bearer' })
+      .send({ ...profile, ...extra })
+      .expect(400);
   });
   it('edición concurrente da conflicto y no duplica auditoría', async () => {
-    await request(app.getHttpServer()).put(path(owner.plot.id) + '/profile').auth(owner.token, { type: 'bearer' }).send(profile).expect(409);
+    await request(app.getHttpServer())
+      .put(path(owner.plot.id) + '/profile')
+      .auth(owner.token, { type: 'bearer' })
+      .send(profile)
+      .expect(409);
     expect(await db.weatherProfileRevision.count()).toBe(1);
   });
   it('concurrencia de sync se serializa y almacena crudo, procedencia y 28 agregados una sola vez', async () => {
     config.set('WEATHER_PROVIDER', 'open-meteo');
     const before = calls;
-    const replies = await Promise.all([service.sync(owner.plot.id, owner.user.id), service.sync(owner.plot.id, owner.user.id)]);
+    const replies = await Promise.all([
+      service.sync(owner.plot.id, owner.user.id),
+      service.sync(owner.plot.id, owner.user.id),
+    ]);
     expect(replies.map((v) => v.status).sort()).toEqual(['cooldown', 'updated']);
     expect(calls - before).toBe(1);
     expect(await db.weatherObservation.count()).toBe(28);
     expect(await db.weatherBatch.count()).toBe(1);
     const result = await service.get(owner.plot.id, owner.user.id);
     expect(result.items).toHaveLength(28);
-    expect(result.provenance).toMatchObject({ dataset: 'ERA5', licence: 'CC BY 4.0', requestedLatitude: 0 });
+    expect(result.provenance).toMatchObject({
+      dataset: 'ERA5',
+      licence: 'CC BY 4.0',
+      requestedLatitude: 0,
+    });
     expect(JSON.stringify(result)).not.toMatch(/"raw"|"updatedBy"|"batchId"/);
     const batches = await db.weatherBatch.findMany();
     expect(batches[0].raw).toHaveProperty('hourly');
@@ -86,28 +288,45 @@ describe('Clima ERA5 por parcela con persistencia aislada, sin red externa', () 
   it('GET no llama al proveedor, FARMER no puede acceder a coordenadas ajenas', async () => {
     const before = calls;
     await service.get(owner.plot.id, owner.user.id);
-    await request(app.getHttpServer()).get(path(owner.plot.id)).auth(farmer.token, { type: 'bearer' }).expect(404);
+    await request(app.getHttpServer())
+      .get(path(owner.plot.id))
+      .auth(farmer.token, { type: 'bearer' })
+      .expect(404);
     expect(calls).toBe(before);
   });
   it('repetir importación no duplica observaciones y conserva batches crudos', async () => {
     config.set('WEATHER_PROVIDER', 'open-meteo');
-    await db.weatherProfile.update({ where: { plotId: owner.plot.id }, data: { attemptAt: new Date(Date.now() - 16 * 60000) } });
+    await db.weatherProfile.update({
+      where: { plotId: owner.plot.id },
+      data: { attemptAt: new Date(Date.now() - 16 * 60000) },
+    });
     await service.sync(owner.plot.id, owner.user.id);
     expect(await db.weatherObservation.count()).toBe(28);
     expect(await db.weatherBatch.count()).toBe(2);
   });
   it('fallo no inventa datos ni borra evidencia previa; cooldown persiste', async () => {
     config.set('WEATHER_PROVIDER', 'open-meteo');
-    await db.weatherProfile.update({ where: { plotId: owner.plot.id }, data: { attemptAt: new Date(Date.now() - 16 * 60000) } });
-    jest.spyOn(app.get(OpenMeteoProvider), 'fetch').mockRejectedValueOnce(new Error('No publicar URL/secretos'));
+    await db.weatherProfile.update({
+      where: { plotId: owner.plot.id },
+      data: { attemptAt: new Date(Date.now() - 16 * 60000) },
+    });
+    jest
+      .spyOn(app.get(OpenMeteoProvider), 'fetch')
+      .mockRejectedValueOnce(new Error('No publicar URL/secretos'));
     await expect(service.sync(owner.plot.id, owner.user.id)).rejects.toMatchObject({ status: 503 });
     expect((await service.get(owner.plot.id, owner.user.id)).items).toHaveLength(28);
-    expect((await db.weatherProfile.findUniqueOrThrow({ where: { plotId: owner.plot.id } })).lastError).toBe('provider_unavailable');
+    expect(
+      (await db.weatherProfile.findUniqueOrThrow({ where: { plotId: owner.plot.id } })).lastError,
+    ).toBe('provider_unavailable');
     expect((await service.sync(owner.plot.id, owner.user.id)).status).toBe('cooldown');
   });
   it('revocar consentimiento cambia versión y no reutiliza datos anteriores ni consulta', async () => {
     config.set('WEATHER_PROVIDER', 'open-meteo');
-    await service.save(owner.plot.id, owner.user.id, { ...profile, enabled: false, expectedVersion: 1 });
+    await service.save(owner.plot.id, owner.user.id, {
+      ...profile,
+      enabled: false,
+      expectedVersion: 1,
+    });
     const before = calls;
     expect((await service.get(owner.plot.id, owner.user.id)).items).toEqual([]);
     await expect(service.sync(owner.plot.id, owner.user.id)).rejects.toMatchObject({ status: 400 });
@@ -119,17 +338,26 @@ describe('Clima ERA5 por parcela con persistencia aislada, sin red externa', () 
     const own = await account('ADMIN');
     await service.save(own.plot.id, own.user.id, profile);
     config.set('WEATHER_PROVIDER', 'open-meteo');
-    jest.spyOn(app.get(OpenMeteoProvider), 'fetch').mockImplementationOnce(async (location, from, to) => {
-      await service.save(own.plot.id, own.user.id, { ...profile, enabled: false, expectedVersion: 1 });
-      return normalizeWeather(weatherFixture(from, to), location, from, to);
-    });
+    jest
+      .spyOn(app.get(OpenMeteoProvider), 'fetch')
+      .mockImplementationOnce(async (location, from, to) => {
+        await service.save(own.plot.id, own.user.id, {
+          ...profile,
+          enabled: false,
+          expectedVersion: 1,
+        });
+        return normalizeWeather(weatherFixture(from, to), location, from, to);
+      });
     await expect(service.sync(own.plot.id, own.user.id)).rejects.toMatchObject({ status: 503 });
     expect(await db.weatherBatch.count({ where: { plotId: own.plot.id } })).toBe(0);
     expect((await service.get(own.plot.id, own.user.id)).profile?.lastError).toBeNull();
   });
   it('archivar o inactivar propietario bloquea lectura y worker; no hay acceso global', async () => {
     await db.plot.update({ where: { id: owner.plot.id }, data: { archivedAt: new Date() } });
-    await request(app.getHttpServer()).get(path(owner.plot.id)).auth(owner.token, { type: 'bearer' }).expect(404);
+    await request(app.getHttpServer())
+      .get(path(owner.plot.id))
+      .auth(owner.token, { type: 'bearer' })
+      .expect(404);
     const before = calls;
     await app.get(WeatherJob).scan();
     expect(calls).toBe(before);

@@ -57,6 +57,8 @@ try {
       ...process.env,
       NODE_ENV: 'test',
       TELEMETRY_MODE: 'demo',
+      THINGSPEAK_IMPORT_ENABLED: 'false',
+      WEATHER_PROVIDER: 'disabled',
       DATABASE_URL: target.toString(),
       TEST_DATABASE_NAME: databaseName,
       JWT_SECRET: randomBytes(32).toString('hex'),

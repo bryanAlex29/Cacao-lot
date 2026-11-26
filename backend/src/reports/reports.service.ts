@@ -46,7 +46,7 @@ export class ReportsService {
         item.deviceId,
         item.source,
         item.eventId,
-        item.recordedAt ?? item.receivedAt,
+        item.providerObservedAt ?? item.recordedAt ?? item.receivedAt,
         item.recordedAt,
         item.receivedAt,
         item.timestampOrigin,

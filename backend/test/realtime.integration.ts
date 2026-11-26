@@ -207,8 +207,9 @@ describe('Socket.IO autenticado, aislado y persistido', () => {
     const updates: TelemetryUpdatedEvent[] = [];
     client.on('telemetry.updated', (value) => updates.push(value));
     const payload = body();
+    const firstUpdate = event<TelemetryUpdatedEvent>(client, 'telemetry.updated', 7000);
     await send(payload).expect(201);
-    await delay(100);
+    expect((await firstUpdate).reading.eventId).toBe(payload.eventId);
     expect(updates).toHaveLength(1);
     await send(payload).expect(201);
     await send({ ...payload, temperatureC: 29 }).expect(409);

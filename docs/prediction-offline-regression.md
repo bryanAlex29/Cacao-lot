@@ -82,8 +82,65 @@ Se añadieron pruebas TypeScript del nuevo dataset, pruebas Python de ajuste/esc
 
 La primera validación pasó: **6 pruebas TS y 12 Python**, tipos/lint y demo correctos. La demo produjo tres modelos experimentales con **30 muestras de entrenamiento, 14 de validación y 15 de prueba por zona**, siempre comparados sobre las mismas fechas. Entorno y artefactos están excluidos de Git; Python global sigue sin scikit-learn.
 
-**La validación final secuencial de backend completo, Python, CLI nuevo/anterior, build y salud sigue en segundo plano al redactar este apartado.** No se declara aprobada todavía; actualizar con la notificación real. Los resultados de la fixture no validan el cultivo.
+El cierre original dejó la validación final pendiente. La revisión posterior
+de backend, frontend, integración, navegador, build y salud se documenta en
+[validación local](validation-2026-11-24.md). Los resultados de la fixture no
+validan el cultivo.
+
+### Preparación y verificación en el equipo actual — 24 de noviembre de 2026
+
+Este equipo tenía únicamente Python global 3.14.6, incompatible con el lock
+binario CPython 3.11. Se descargó Python oficial **3.11.9 / Windows x64**
+mediante el administrador de Python, que verificó la firma del índice de
+python.org. Se extrajo exclusivamente en `.local/prediction-runtime`, sin
+registrarlo como Python global ni modificar sus alias.
+
+Se creó un entorno nuevo `.local/prediction-python`; no se sobrescribió ningún
+entorno anterior. Comandos ejecutados desde la raíz:
+
+```powershell
+py install --dry-run --target=.local/prediction-runtime 3.11
+py install --target=.local/prediction-runtime 3.11
+.local/prediction-runtime/python.exe -m venv .local/prediction-python
+.local/prediction-python/Scripts/python.exe -m pip install --require-hashes --only-binary=:all: -r analytics/prediction/requirements-win-py311.txt
+.local/prediction-python/Scripts/python.exe -m pip check
+npm.cmd run test:regression-python
+npm.cmd run test:regression-cli
+npm.cmd run prediction:regression:demo
+```
+
+Antes de reutilizar esos comandos, comprobar que los destinos no existan y no
+sobrescribirlos. Ambos directorios están excluidos de Git. Python global sigue
+en 3.14.6 y el administrador continúa listando solo esa instalación global.
+No se cambiaron dependencias fijadas, scripts ni código productivo.
+
+Resultados de esta ejecución:
+
+- Siete dependencias del lock instaladas con verificación de hashes y sin
+  compilaciones desde fuentes; `pip check` correcto.
+- **12 pruebas Python y 2 pruebas CLI correctas**, incluida reproducción del
+  experimento y rechazo de entradas/entornos no admitidos.
+- Demo completa en
+  `.local/prediction-regression-runs/run-2026-11-25T02-07-29.712Z-2721f3177f796820`.
+- Tres zonas con estado `fitted_experimental`; informe `experimental` y
+  `fieldValidated: false`. Hashes de dataset e informe coinciden con
+  `complete.json`.
+
+No se consultó ni modificó PostgreSQL, no se conectó una fuente meteorológica
+y no se publicaron pronósticos web ni órdenes de riego. La instalación descargó
+el runtime y las dependencias; la evaluación utilizó la fixture sintética local.
 
 ## Pendientes
 
-Exportador autorizado de datos reales, variables ambientales/climáticas con procedencia y disponibilidad temporal verificadas, evaluación con muestras de campo y calibración, balance hídrico justificado, persistencia de versiones/predicciones y exposición web controlada. La pantalla sigue indicando que no hay modelo operativo implementado, aunque esta referencia de regresión offline ya exista.
+La integración posterior ya permite [registrar versiones privadas y consultar
+la regresión en Angular](prediction-web-regression.md), sin entrenar por HTTP.
+Las descripciones anteriores corresponden al incremento offline original.
+
+El [exportador autorizado por API](prediction-offline-export.md) permite descargar
+el contrato de entrada desde lecturas propias, con
+[descarga explícita desde Angular](prediction-offline-export-ui.md). No se
+exportan datos automáticamente. Siguen pendientes variables ambientales/climáticas
+con procedencia y disponibilidad temporal verificadas, evaluación con muestras de
+campo y calibración, balance hídrico justificado y persistencia de emisiones.
+La pantalla ofrece inferencia experimental controlada, no un modelo hídrico
+operativo validado.

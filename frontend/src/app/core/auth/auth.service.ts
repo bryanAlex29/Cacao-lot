@@ -86,18 +86,20 @@ export class AuthService {
     clearTimeout(this.timer);
     this.cancelRenewal.next();
     this.revision++;
-    return this.http
-      .post<LoginResponse>('/api/v1/auth/login', { email, password })
-      .pipe(tap((response) => this.saveSession(response)));
+    return this.http.post<LoginResponse>('/api/v1/auth/login', { email, password }).pipe(
+      timeout(15000),
+      tap((response) => this.saveSession(response)),
+    );
   }
 
   register(input: RegisterInput) {
     clearTimeout(this.timer);
     this.cancelRenewal.next();
     this.revision++;
-    return this.http
-      .post<LoginResponse>('/api/v1/auth/register', input)
-      .pipe(tap((response) => this.saveSession(response)));
+    return this.http.post<LoginResponse>('/api/v1/auth/register', input).pipe(
+      timeout(15000),
+      tap((response) => this.saveSession(response)),
+    );
   }
 
   private saveSession(response: LoginResponse): void {

@@ -94,7 +94,7 @@ describe('Pantalla de predicción: cobertura privada sin inventar resultados', (
     respond();
     const root: HTMLElement = fixture.nativeElement;
     expect(root.querySelectorAll('h1')).toHaveLength(1);
-    expect(root.textContent).toContain('modelo no implementado');
+    expect(root.textContent).toContain('sin validación de campo');
     expect(root.querySelector('app-page-header .connection')).toBeNull();
     expect(root.querySelector('[aria-current="page"]')?.textContent).toContain(
       'Predicción hídrica',
@@ -111,7 +111,7 @@ describe('Pantalla de predicción: cobertura privada sin inventar resultados', (
     expect(fixture.componentInstance.snapshot()).toBeNull();
     http.verify();
   });
-  it('renderiza A/B/C, ceros, ausencia, UTC y advertencia de calibración', async () => {
+  it('presenta solo sensor 1 y mantiene respuesta completa, ceros, UTC y advertencias', async () => {
     const { fixture, http, respond, prediction } = await setup();
     respond();
     fixture.componentInstance.choose('device');
@@ -121,7 +121,8 @@ describe('Pantalla de predicción: cobertura privada sin inventar resultados', (
     req.flush(snapshot());
     fixture.detectChanges();
     const root: HTMLElement = fixture.nativeElement;
-    expect(root.querySelectorAll('article')).toHaveLength(3);
+    expect(root.querySelectorAll('article')).toHaveLength(1);
+    expect(fixture.componentInstance.snapshot()?.zones).toHaveLength(3);
     expect(root.querySelector('article')?.textContent).toContain('Sin muestras válidas');
     expect(root.textContent).toContain('calibración no evaluada');
     expect(root.textContent).toContain('0 de 30');

@@ -27,6 +27,7 @@ describe('Seguridad HTTP y persistencia PostgreSQL reales', () => {
   let oneTimeKey: string;
   let bootstrapExit: number | null;
   let repeatedBootstrapExit: number | null;
+  let bootstrapErrors: string[];
   let registeredToken: string;
   const password = `Aa!${randomBytes(24).toString('hex')}`;
   const minimumPassword = 'Abcdefg!'; // Solo fixture de prueba en base temporal.
@@ -58,8 +59,11 @@ describe('Seguridad HTTP y persistencia PostgreSQL reales', () => {
         encoding: 'utf8',
         timeout: 30000,
       });
-    bootstrapExit = bootstrap().status;
-    repeatedBootstrapExit = bootstrap().status;
+    const firstBootstrap = bootstrap();
+    const repeatedBootstrap = bootstrap();
+    bootstrapExit = firstBootstrap.status;
+    repeatedBootstrapExit = repeatedBootstrap.status;
+    bootstrapErrors = [firstBootstrap.stderr, repeatedBootstrap.stderr];
     const hash = await passwords.hash(password);
     const a = await database.user.create({
       data: { name: 'Admin A', email: 'a@example.test', passwordHash: hash, role: 'ADMIN' },
@@ -100,7 +104,16 @@ describe('Seguridad HTTP y persistencia PostgreSQL reales', () => {
     if (app) await app.close();
   });
 
-  it('CLI crea el primer admin una sola vez y no sobrescribe cuentas', async () => {
+  it('CLI limita bootstrap a local y no sobrescribe cuentas', async () => {
+    const host = new URL(process.env['DATABASE_URL'] ?? '').hostname;
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(host)) {
+      expect(bootstrapExit).toBe(1);
+      expect(repeatedBootstrapExit).toBe(1);
+      for (const error of bootstrapErrors)
+        expect(error).toContain('El bootstrap está limitado a desarrollo y PostgreSQL local.');
+      expect(await database.user.count({ where: { email: 'bootstrap@example.test' } })).toBe(0);
+      return;
+    }
     expect(bootstrapExit).toBe(0);
     expect(repeatedBootstrapExit).toBe(1);
     expect(

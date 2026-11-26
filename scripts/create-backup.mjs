@@ -21,7 +21,9 @@ import {
 } from './backup-bundle.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-if (process.argv.length !== 2) throw new Error('Uso: npm run backup:create (sin argumentos)');
+const args = process.argv.slice(2);
+const json = args.length === 1 && args[0] === '--json';
+if (args.length !== 0 && !json) throw new Error('Uso: npm run backup:create -- [--json]');
 loadEnvFile(join(root, '.env'));
 const source = localRestoreSource(process.env);
 await mkdir(join(root, '.local/backups'), { recursive: true, mode: 0o700 });
@@ -98,8 +100,16 @@ try {
     flag: 'wx',
     mode: 0o600,
   });
+  const result = {
+    resultVersion: 1,
+    directory: relative(root, directory),
+    tables: Object.keys(manifest.data).length,
+    images: manifest.images.length,
+  };
   console.log(
-    `Respaldo conjunto creado: ${relative(root, directory)} (${Object.keys(manifest.data).length} tablas, ${manifest.images.length} fotografías). Ejecuta backup:verify para ensayar su recuperación.`,
+    json
+      ? JSON.stringify(result)
+      : `Respaldo conjunto creado: ${result.directory} (${result.tables} tablas, ${result.images} fotografías). Ejecuta backup:verify para ensayar su recuperación.`,
   );
 } finally {
   await db.$disconnect();

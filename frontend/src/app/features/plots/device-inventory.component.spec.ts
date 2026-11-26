@@ -183,6 +183,70 @@ describe('Inventario de dispositivos por parcela, solo lectura', () => {
     expect(fixture.nativeElement.textContent).not.toContain('secret-test-only');
     http.verify();
   });
+  it('habilitación incierta no se desbloquea con consulta fallida; solo inventario validado', async () => {
+    const { fixture, first, http, component } = await setup(true);
+    first.flush(page());
+    fixture.detectChanges();
+    const manager = fixture.debugElement.query(By.directive(DeviceManagementComponent))
+      .componentInstance as DeviceManagementComponent;
+    manager.target.set(device);
+    manager.setActive();
+    const write = http.expectOne('/api/v1/plots/plot/devices/device');
+    component.load(0);
+    http.expectNone('/api/v1/plots/plot/devices?limit=10&offset=0');
+    expect(write.cancelled).toBe(false);
+    write.flush({}, { status: 503, statusText: 'Unconfirmed' });
+    http
+      .expectOne('/api/v1/plots/plot/devices?limit=10&offset=0')
+      .flush({}, { status: 503, statusText: 'Unavailable' });
+    fixture.detectChanges();
+    expect(manager.uncertainToggle()).toBe(true);
+    manager.openTarget(device, new Event('click'));
+    expect(manager.target()).toBeNull();
+    component.load(0);
+    http
+      .expectOne('/api/v1/plots/plot/devices?limit=10&offset=0')
+      .flush(page([{ ...device, isActive: false }]));
+    fixture.detectChanges();
+    expect(manager.uncertainToggle()).toBe(false);
+    manager.openTarget(component.devices()[0]!, new Event('click'));
+    manager.setActive();
+    const retry = http.expectOne('/api/v1/plots/plot/devices/device');
+    expect(retry.request.body).toEqual({ isActive: true });
+    retry.flush({ ...device, isActive: true });
+    http.expectOne('/api/v1/plots/plot/devices?limit=10&offset=0').flush(page());
+    http.verify();
+  });
+  it('alta incierta exige inventario correcto antes de aceptar la revisión manual', async () => {
+    const { fixture, first, http, component } = await setup(true);
+    first.flush(page());
+    fixture.detectChanges();
+    const manager = component.management()!;
+    manager.form.setValue({
+      serial: 'nuevo',
+      source: 'real',
+      expectedIntervalSeconds: 60,
+      confirmed: true,
+    });
+    manager.create();
+    http
+      .expectOne('/api/v1/plots/plot/devices')
+      .flush({}, { status: 503, statusText: 'Unconfirmed' });
+    manager.reviewed();
+    expect(manager.uncertain()).toBe(true);
+    component.load(0);
+    http.expectOne('/api/v1/plots/plot/devices?limit=10&offset=0').flush({});
+    fixture.detectChanges();
+    manager.reviewed();
+    expect(manager.uncertain()).toBe(true);
+    component.load(0);
+    http.expectOne('/api/v1/plots/plot/devices?limit=10&offset=0').flush(page());
+    fixture.detectChanges();
+    manager.reviewed();
+    expect(manager.uncertain()).toBe(false);
+    expect(manager.form.controls.serial.value).toBe('nuevo');
+    http.verify();
+  });
   it('muestra inventario vacío sin crear sensores ni sustituirlo por DEMO', async () => {
     const { fixture, component, first, http } = await setup();
     first.flush(page([]));

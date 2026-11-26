@@ -4,7 +4,7 @@
   min-height: 100dvh;
 }
 .sidebar {
-  background: var(--green-dark);
+  background: linear-gradient(165deg, #103e30, #092b23);
   color: white;
   padding: 40px 24px;
   display: flex;
@@ -103,9 +103,11 @@ main {
   padding: var(--page-gutter);
 }
 .intro {
-  background: linear-gradient(115deg, #00371e, #17672b);
+  background:
+    radial-gradient(ellipse at 100% 0, #90a86f38, transparent 55%),
+    linear-gradient(115deg, #103e30, #255b40);
   padding: clamp(24px, 4vw, 54px);
-  border-radius: 20px;
+  border-radius: 24px;
   color: white;
 }
 .eyebrow {
@@ -129,10 +131,10 @@ h1 {
 .health-panel {
   margin-top: 24px;
   padding: 24px;
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   background: white;
   border: 1px solid var(--border);
-  box-shadow: 0 3px 8px #002d1b08;
+  box-shadow: var(--shadow-card);
 }
 .panel-heading {
   display: flex;

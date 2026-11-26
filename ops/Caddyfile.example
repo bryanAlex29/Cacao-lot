@@ -1,0 +1,28 @@
+# Referencia NO activada. Requiere host/dominio reales, Caddy y revisión de red.
+# Variables CACAOSMART_DOMAIN y CACAOSMART_WEB_ROOT se definen en el servicio Caddy.
+# WEB_ROOT apunta SOLO a frontend/dist/frontend/browser, nunca al repositorio.
+{$CACAOSMART_DOMAIN} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+	}
+	request_body {
+		max_size 10MB
+	}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3100
+	}
+	handle /socket.io/* {
+		reverse_proxy 127.0.0.1:3100
+	}
+	handle {
+		root * {$CACAOSMART_WEB_ROOT}
+		route {
+			try_files {path} /index.html
+			header /index.html Cache-Control "no-cache"
+		}
+		file_server
+	}
+}
