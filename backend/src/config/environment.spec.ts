@@ -85,6 +85,23 @@ describe('Configuración de entorno', () => {
       'válidos',
     );
   });
+  it('la excepción de cuota está vacía por defecto y solo acepta un UUID v4', () => {
+    expect(validateEnvironment(base).AI_UNLIMITED_USER_ID).toBe('');
+    expect(
+      validateEnvironment({ ...base, AI_UNLIMITED_USER_ID: '31851C38-80DD-4EB4-B86C-A427F6210AE4' })
+        .AI_UNLIMITED_USER_ID,
+    ).toBe('31851c38-80dd-4eb4-b86c-a427f6210ae4');
+    for (const value of [
+      'bryan vera',
+      '*',
+      'all',
+      '31851c38-80dd-4eb4-b86c-a427f6210ae4,another',
+    ]) {
+      expect(() => validateEnvironment({ ...base, AI_UNLIMITED_USER_ID: value })).toThrow(
+        'AI_UNLIMITED_USER_ID',
+      );
+    }
+  });
   it.each([
     { AI_MAX_IMAGE_MB: 0 },
     { AI_MAX_IMAGE_MB: 9 },

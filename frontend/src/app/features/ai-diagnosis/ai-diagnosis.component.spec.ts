@@ -7,12 +7,12 @@ import { BehaviorSubject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { AiDiagnosisComponent } from './ai-diagnosis.component';
-import type { Diagnosis } from '../../core/ai-diagnosis/ai-diagnosis-api.service';
+import type { Diagnosis, DiagnosisOptions } from '../../core/ai-diagnosis/ai-diagnosis-api.service';
 import { localDateTime } from '../../core/telemetry/history-period';
 
 describe('Diagnóstico privado DEMO', () => {
   const base = '/api/v1/ai-diagnostics';
-  const options = {
+  const options: DiagnosisOptions = {
     provider: 'mock',
     maxImageBytes: 8 * 1048576,
     dailyLimit: 5,
@@ -94,6 +94,18 @@ describe('Diagnóstico privado DEMO', () => {
     expect(fixture.nativeElement.textContent).toContain('No se evalúan enfermedades reales');
     expect(fixture.nativeElement.textContent).toContain('7 días');
     http.expectNone((req) => req.method !== 'GET');
+    component.submit();
+    http.expectNone(base);
+    expect(component.error()).toContain('consentimiento');
+  });
+  it('muestra cuota diaria ilimitada solo cuando lo indica la configuración autenticada', async () => {
+    const { component, fixture, http } = await setup({ ...options, dailyLimit: null });
+    file(component);
+    fixture.detectChanges();
+    const text: string = fixture.nativeElement.textContent;
+    expect(text).toContain('Sin límite diario de análisis para tu cuenta');
+    expect(text).toContain('consume saldo de la API');
+    expect(text).not.toContain('5 intentos por usuario');
     component.submit();
     http.expectNone(base);
     expect(component.error()).toContain('consentimiento');

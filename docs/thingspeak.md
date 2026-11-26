@@ -167,7 +167,82 @@ La deduplicación por entry_id ya está implementada; la recuperación históric
 y la revisión de frecuencia quedan pendientes. No se confunde la recepción de
 ThingSpeak con la hora de medición del ESP32.
 
-## Verificar sin credenciales
+## Uso en este PC y transferencia a otro equipo
+
+La conexión local se configura en el `.env` **privado de la raíz**, no en Angular
+ni en `.env.example`. El canal `3554501` es público como identificador, pero su
+Read API Key es una credencial y no se publica. `.env.example` deja esa clave
+vacía y la importación desactivada. Rotar la clave de lectura si se ha compartido
+fuera del equipo autorizado; nunca usar la Write API Key en la aplicación.
+
+**Descargar GitHub no descarga PostgreSQL.** El `.env` contiene configuración,
+no la parcela ni sus lecturas. No copiar `DATABASE_URL` de otro PC esperando
+acceder a su base local: `127.0.0.1` siempre apunta al propio equipo.
+
+### Equipo nuevo con su propia base y cuenta
+
+1. Seguir la instalación local y aplicar las migraciones en su propia base.
+2. Crear o utilizar una cuenta autorizada; obtener su UUID exacto sin cambiar roles.
+3. Configurar en su `.env` privado `THINGSPEAK_CHANNEL_ID=3554501` y la
+   `THINGSPEAK_READ_API_KEY` recibida por un canal privado. Conservar sus propias
+   credenciales de PostgreSQL/JWT y no copiar claves OpenAI innecesariamente.
+4. Con `THINGSPEAK_IMPORT_ENABLED=false`, ejecutar:
+
+   ```powershell
+   npm.cmd run thingspeak:check --workspace=@cacaosmart/backend
+   npm.cmd run thingspeak:provision --workspace=@cacaosmart/backend -- UUID_DEL_PROPIETARIO_LOCAL
+   npm.cmd run thingspeak:import-once --workspace=@cacaosmart/backend
+   ```
+
+5. Poner `THINGSPEAK_IMPORT_ENABLED=true`, reiniciar la API y abrir **Mis parcelas
+   → Cacao · ThingSpeak → Abrir panel de monitoreo**, con origen **Real**.
+
+Este camino recrea la asociación para el propietario local y consulta la última
+entrada del canal. **No recupera todo el histórico anterior**. Cada equipo tendrá
+sus propios UUID y solo verá los recursos de su cuenta; no se habilita acceso
+global a todas las personas que descarguen el repositorio.
+
+### Conservar la misma parcela y el histórico
+
+Crear un respaldo con `npm run backup:create` y verificarlo con
+`npm run backup:verify -- --directory .local/backups/DIRECTORIO`. Guardar también
+el vínculo privado `.local/thingspeak.json` correspondiente a esa base. La copia
+de ese vínculo debe acompañar al respaldo de PostgreSQL: un vínculo de una base
+distinta no concede acceso ni crea automáticamente sus UUID.
+
+El paquete de PostgreSQL/fotos puede contener cuentas, hashes y fotografías
+privadas: compartir solo con personas autorizadas mediante almacenamiento privado
+y protegido, **nunca en GitHub**. Las claves se transfieren por separado y solo
+las necesarias. No subir `.env`, `.local/`, volcados ni fotografías al repositorio.
+
+`backup:verify` ensaya restauración en una base temporal y la elimina: **no restaura
+sobre la base principal del nuevo equipo**. La restauración definitiva requiere
+planificar el destino y autorización antes de sobrescribir datos. Después de
+restaurar en un destino nuevo, recuperar `.local/thingspeak.json`, comprobar la
+cuenta propietaria y configurar su `.env` privado antes de activar el worker.
+
+### Activación local — 26/11/2026
+
+En este equipo se creó la parcela **Cacao · ThingSpeak** para la única cuenta
+activa `bryan vera`, sin cambiar su rol ni sus parcelas anteriores. El canal real
+respondió con los cuatro campos documentados y permitió importar nuevas entradas.
+La provisión repetida comprobó la asociación sin duplicar parcela o dispositivo.
+No se modificó firmware ni se enviaron órdenes al relé o a la válvula.
+
+Se verificó un respaldo posterior con 21 tablas y una fotografía en una base
+aislada; el vínculo `thingspeak.json` se copió al directorio privado del respaldo
+y su huella SHA256 coincide con el original. La importación periódica quedó
+activa y se verificó persistencia de entradas nuevas con origen REAL.
+
+Después de incorporar `kike-dev` (`596a5a7`) por avance rápido, pasaron tipos,
+lint, build y 1.211 pruebas (529 backend y 682 Angular). El cambio recibido solo
+afecta metadatos `peer` del lockfile, sin modificar versiones ni hashes.
+La auditoría completa informa 16 avisos moderados en herramientas de desarrollo;
+con `--omit=dev` no informa vulnerabilidades. No se aplicó `audit fix --force`
+porque propone cambiar Angular CLI de forma incompatible. No se repitieron aquí
+las suites de integración ni de navegador real.
+
+## Pruebas sin credenciales
 
 ```powershell
 npm.cmd run test --workspace=@cacaosmart/backend -- --runTestsByPath src/integrations/thingspeak.client.spec.ts src/integrations/thingspeak.mapping.spec.ts

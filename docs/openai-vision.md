@@ -34,6 +34,23 @@ backend después de editar `.env`, sin iniciar otra copia sobre el mismo puerto.
 
 ## Resultado y límites
 
+### Excepción temporal de cuota para una cuenta
+
+`AI_DAILY_LIMIT_PER_USER=5` sigue siendo el límite diario general. Para eximir
+únicamente una cuenta autorizada, configurar su UUID v4 exacto en el `.env`
+privado como `AI_UNLIMITED_USER_ID`. No utilizar nombres ni permitir que el
+navegador elija la excepción. El endpoint autenticado `/ai-diagnostics/config`
+devuelve `dailyLimit: null` solo para esa cuenta; la interfaz indica que no tiene
+cuota diaria. Las otras cuentas siguen limitadas. No se cambian roles ni datos.
+
+Para revocar la excepción, dejar `AI_UNLIMITED_USER_ID=` vacío y reiniciar el
+backend. Los intentos anteriores siguen contándose en el día UTC; no se borra
+historial ni se devuelve cuota. Se conservan JWT, propiedad, consentimiento,
+idempotencia, límites de imagen y protección de frecuencia (20 solicitudes por
+minuto en la subida). Sin cuota diaria **no significa saldo OpenAI ilimitado**.
+
+### Alcance de las recomendaciones
+
 - Síntomas visibles y posibles causas/enfermedades con motivos e incertidumbre.
 - Pasos de observación, cuidados prudentes, agua, nutrición y seguimiento.
 - Foto borrosa, planta no evaluable o evidencia insuficiente: no concluyente.

@@ -27,15 +27,19 @@ import { DiagnosisService } from './diagnosis.service';
 export class DiagnosisController {
   constructor(private readonly diagnoses: DiagnosisService) {}
   @Get('config')
-  @ApiOperation({ summary: 'Límites y consentimiento del proveedor simulado, sin secretos' })
-  options() {
-    return this.diagnoses.options();
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary:
+      'Límites de la cuenta autenticada (dailyLimit null = sin cuota diaria) y consentimiento, sin secretos',
+  })
+  options(@CurrentUser() user: AuthenticatedUser) {
+    return this.diagnoses.options(user.id);
   }
   @Post()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary:
-      'Procesa una fotografía privada con proveedor DEMO; requiere consentimiento demo-v1 y requestId idempotente',
+      'Procesa una fotografía privada con el proveedor configurado; requiere consentimiento correspondiente y requestId idempotente',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -46,7 +50,7 @@ export class DiagnosisController {
         image: { type: 'string', format: 'binary' },
         plotId: { type: 'string', format: 'uuid' },
         requestId: { type: 'string', format: 'uuid' },
-        consentVersion: { type: 'string', enum: ['demo-v1'] },
+        consentVersion: { type: 'string', enum: ['demo-v1', 'openai-v1'] },
         retentionDays: { type: 'integer', minimum: 1, maximum: 30 },
         notes: { type: 'string', maxLength: 1000 },
       },

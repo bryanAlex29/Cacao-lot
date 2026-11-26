@@ -100,12 +100,19 @@
                       <textarea [formControl]="notes" maxlength="1000" rows="3"></textarea>
                     </label>
                     <p class="help">
-                      Cuota: {{ limits.dailyLimit }} intentos por usuario y día UTC. Los fallos y
-                      eliminados también cuentan. Retención máxima: {{ limits.retentionDays }} días;
-                      puedes eliminar antes desde el historial. Al eliminar se retiran foto y
-                      resultado; la referencia del intento se conserva hasta vencer para evitar
-                      duplicados y controlar cuota. La limpieza física se ejecuta al iniciar el
-                      backend y cada minuto mientras esté activo.
+                      @if (limits.dailyLimit === null) {
+                        Sin límite diario de análisis para tu cuenta hasta nueva indicación. Se
+                        mantienen los controles de seguridad y frecuencia de solicitudes. Cada
+                        análisis con OpenAI consume saldo de la API.
+                      } @else {
+                        Cuota: {{ limits.dailyLimit }} intentos por usuario y día UTC. Los fallos y
+                        eliminados también cuentan.
+                      }
+                      Retención máxima: {{ limits.retentionDays }} días; puedes eliminar antes desde
+                      el historial. Al eliminar se retiran foto y resultado; la referencia del
+                      intento se conserva hasta vencer para evitar duplicados y controlar cuota. La
+                      limpieza física se ejecuta al iniciar el backend y cada minuto mientras esté
+                      activo.
                     </p>
                     <label class="check">
                       <input type="checkbox" [formControl]="consent" />

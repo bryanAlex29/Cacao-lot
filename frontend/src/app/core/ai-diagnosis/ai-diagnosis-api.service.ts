@@ -30,7 +30,7 @@ export interface Diagnosis {
 export interface DiagnosisOptions {
   provider: 'mock' | 'disabled' | 'openai';
   maxImageBytes: number;
-  dailyLimit: number;
+  dailyLimit: number | null;
   retentionDays: number;
   consentVersion: 'demo-v1' | 'openai-v1';
 }

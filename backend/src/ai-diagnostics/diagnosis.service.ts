@@ -39,11 +39,14 @@ export class DiagnosisService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
   }
-  options() {
+  options(userId?: string) {
     return {
       provider: this.config.get('AI_PROVIDER', { infer: true }),
       maxImageBytes: this.config.get('AI_MAX_IMAGE_MB', { infer: true }) * 1024 * 1024,
-      dailyLimit: this.config.get('AI_DAILY_LIMIT_PER_USER', { infer: true }),
+      dailyLimit:
+        userId && userId === this.config.get('AI_UNLIMITED_USER_ID', { infer: true })
+          ? null
+          : this.config.get('AI_DAILY_LIMIT_PER_USER', { infer: true }),
       retentionDays: this.config.get('IMAGE_RETENTION_DAYS', { infer: true }),
       consentVersion:
         this.config.get('AI_PROVIDER', { infer: true }) === 'openai' ? 'openai-v1' : 'demo-v1',
@@ -76,7 +79,7 @@ export class DiagnosisService implements OnModuleInit, OnModuleDestroy {
       userId,
       input,
       hash,
-      this.options().dailyLimit,
+      this.options(userId).dailyLimit,
       Math.min(input.retentionDays, this.options().retentionDays),
       provider as 'mock' | 'openai',
     );

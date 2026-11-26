@@ -208,6 +208,54 @@ describe('Diagnóstico DEMO privado con PostgreSQL y almacenamiento aislado', ()
       config.set('AI_DAILY_LIMIT_PER_USER', 5);
     }
   });
+  it('exime solo al UUID configurado, conserva idempotencia y permite revocar sin borrar historial', async () => {
+    const exempt = await account(),
+      limited = await account();
+    const config = app.get(ConfigService);
+    config.set('AI_DAILY_LIMIT_PER_USER', 1);
+    config.set('AI_UNLIMITED_USER_ID', exempt.user.id);
+    const provider = jest.spyOn(app.get(VisionAnalysisProvider), 'analyze');
+    try {
+      const ownConfig = await request(app.getHttpServer())
+        .get('/api/v1/ai-diagnostics/config')
+        .auth(exempt.token, { type: 'bearer' })
+        .expect(200);
+      expect(ownConfig.body.dailyLimit).toBeNull();
+      expect(ownConfig.headers['cache-control']).toBe('no-store');
+      expect(JSON.stringify(ownConfig.body)).not.toContain(exempt.user.id);
+      const otherConfig = await request(app.getHttpServer())
+        .get('/api/v1/ai-diagnostics/config')
+        .auth(limited.token, { type: 'bearer' })
+        .expect(200);
+      expect(otherConfig.body.dailyLimit).toBe(1);
+      const body = input(exempt.plot.id);
+      const first = await service.create(exempt.user.id, body, { buffer: image });
+      await service.create(exempt.user.id, input(exempt.plot.id), { buffer: image });
+      expect((await service.create(exempt.user.id, body, { buffer: image })).id).toBe(first.id);
+      expect(provider).toHaveBeenCalledTimes(2);
+      await service.create(limited.user.id, input(limited.plot.id), { buffer: image });
+      await expect(
+        service.create(limited.user.id, input(limited.plot.id), { buffer: image }),
+      ).rejects.toMatchObject({ status: 429 });
+      await expect(
+        service.create(exempt.user.id, input(limited.plot.id), { buffer: image }),
+      ).rejects.toMatchObject({ status: 404 });
+      config.set('AI_UNLIMITED_USER_ID', '');
+      expect(service.options(exempt.user.id).dailyLimit).toBe(1);
+      await expect(
+        service.create(exempt.user.id, input(exempt.plot.id), { buffer: image }),
+      ).rejects.toMatchObject({ status: 429 });
+      expect(await db.aiDiagnosis.count({ where: { userId: exempt.user.id } })).toBe(2);
+    } finally {
+      config.set('AI_DAILY_LIMIT_PER_USER', 5);
+      config.set('AI_UNLIMITED_USER_ID', '');
+    }
+  });
+  it('el cliente no puede solicitar exención con campos del formulario', async () => {
+    const own = await account();
+    await upload(own.token, { ...input(own.plot.id), dailyLimit: 'unlimited' }).expect(400);
+    expect(await db.aiDiagnosis.count({ where: { userId: own.user.id } })).toBe(0);
+  });
   it.each(['malformed', 'unavailable', 'timeout'])(
     'fallo %s conserva estado sin diagnóstico inventado y borra imagen',
     async (kind) => {

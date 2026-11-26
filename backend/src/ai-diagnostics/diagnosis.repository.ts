@@ -12,7 +12,7 @@ export class DiagnosisRepository {
     userId: string,
     input: CreateDiagnosisDto,
     payloadHash: string,
-    limit: number,
+    limit: number | null,
     retentionDays: number,
     provider: 'mock' | 'openai' = 'mock',
   ) {
@@ -44,7 +44,10 @@ export class DiagnosisRepository {
       const now = new Date();
       const day = new Date(now);
       day.setUTCHours(0, 0, 0, 0);
-      if ((await tx.aiDiagnosis.count({ where: { userId, createdAt: { gte: day } } })) >= limit)
+      if (
+        limit !== null &&
+        (await tx.aiDiagnosis.count({ where: { userId, createdAt: { gte: day } } })) >= limit
+      )
         throw new HttpException('Cuota diaria de análisis alcanzada (día UTC)', 429);
       const id = randomUUID();
       const record = await tx.aiDiagnosis.create({

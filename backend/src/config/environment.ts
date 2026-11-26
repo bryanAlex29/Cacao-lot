@@ -11,6 +11,7 @@ export interface Environment {
   OPENAI_VISION_MODEL: string;
   AI_MAX_IMAGE_MB: number;
   AI_DAILY_LIMIT_PER_USER: number;
+  AI_UNLIMITED_USER_ID: string;
   AI_REQUEST_TIMEOUT_MS: number;
   IMAGE_RETENTION_DAYS: number;
   IMAGE_STORAGE_PATH?: string;
@@ -77,6 +78,14 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
     throw new Error('AI_PROVIDER inválido; mock no permitido en producción');
   }
   const openaiKey = String(input['OPENAI_API_KEY'] ?? '').trim();
+  const unlimitedUserId = String(input['AI_UNLIMITED_USER_ID'] ?? '')
+    .trim()
+    .toLowerCase();
+  if (
+    unlimitedUserId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(unlimitedUserId)
+  )
+    throw new Error('AI_UNLIMITED_USER_ID requiere un UUID v4 o vacío');
   const visionModel = String(input['OPENAI_VISION_MODEL'] ?? 'gpt-5.4-mini').trim();
   if (aiProvider === 'openai' && (!openaiKey || !/^[a-zA-Z0-9._-]{1,100}$/.test(visionModel)))
     throw new Error('OpenAI requiere OPENAI_API_KEY y OPENAI_VISION_MODEL válidos en el servidor');
@@ -116,6 +125,7 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
     OPENAI_VISION_MODEL: visionModel,
     AI_MAX_IMAGE_MB: bounded('AI_MAX_IMAGE_MB', 8, 8),
     AI_DAILY_LIMIT_PER_USER: bounded('AI_DAILY_LIMIT_PER_USER', 5, 100),
+    AI_UNLIMITED_USER_ID: unlimitedUserId,
     AI_REQUEST_TIMEOUT_MS: bounded('AI_REQUEST_TIMEOUT_MS', 10000, 30000),
     IMAGE_RETENTION_DAYS: bounded('IMAGE_RETENTION_DAYS', 7, 30),
     WEATHER_PROVIDER: weather as Environment['WEATHER_PROVIDER'],

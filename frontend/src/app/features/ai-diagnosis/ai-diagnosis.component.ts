@@ -106,6 +106,10 @@ export class AiDiagnosisComponent {
                   ) ||
                   options.maxImageBytes < 1 ||
                   options.maxImageBytes > 8 * 1024 * 1024 ||
+                  (options.dailyLimit !== null &&
+                    (!Number.isInteger(options.dailyLimit) ||
+                      options.dailyLimit < 1 ||
+                      options.dailyLimit > 100)) ||
                   options.retentionDays < 1 ||
                   options.retentionDays > 30
                 ) {

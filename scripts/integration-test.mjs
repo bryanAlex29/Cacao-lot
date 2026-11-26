@@ -57,6 +57,12 @@ try {
       ...process.env,
       NODE_ENV: 'test',
       TELEMETRY_MODE: 'demo',
+      // Isolate tests before AppModule import evaluates ConfigModule.forRoot().
+      // Never inherit a real vision provider, key or personal quota exemption.
+      AI_PROVIDER: 'mock',
+      OPENAI_API_KEY: '',
+      AI_UNLIMITED_USER_ID: '',
+      AI_DAILY_LIMIT_PER_USER: '5',
       THINGSPEAK_IMPORT_ENABLED: 'false',
       WEATHER_PROVIDER: 'disabled',
       DATABASE_URL: target.toString(),
