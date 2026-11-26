@@ -6,7 +6,9 @@ export interface Environment {
   DATABASE_URL: string;
   TELEMETRY_MODE: 'real' | 'demo';
   JWT_SECRET: string;
-  AI_PROVIDER: 'mock' | 'disabled';
+  AI_PROVIDER: 'mock' | 'disabled' | 'openai';
+  OPENAI_API_KEY: string;
+  OPENAI_VISION_MODEL: string;
   AI_MAX_IMAGE_MB: number;
   AI_DAILY_LIMIT_PER_USER: number;
   AI_REQUEST_TIMEOUT_MS: number;
@@ -69,11 +71,15 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
   }
   const aiProvider = input['AI_PROVIDER'] ?? (nodeEnv === 'production' ? 'disabled' : 'mock');
   if (
-    !['mock', 'disabled'].includes(String(aiProvider)) ||
-    (nodeEnv === 'production' && aiProvider !== 'disabled')
+    !['mock', 'disabled', 'openai'].includes(String(aiProvider)) ||
+    (nodeEnv === 'production' && aiProvider === 'mock')
   ) {
-    throw new Error('AI_PROVIDER: solo mock fuera de producción o disabled');
+    throw new Error('AI_PROVIDER inválido; mock no permitido en producción');
   }
+  const openaiKey = String(input['OPENAI_API_KEY'] ?? '').trim();
+  const visionModel = String(input['OPENAI_VISION_MODEL'] ?? 'gpt-5.4-mini').trim();
+  if (aiProvider === 'openai' && (!openaiKey || !/^[a-zA-Z0-9._-]{1,100}$/.test(visionModel)))
+    throw new Error('OpenAI requiere OPENAI_API_KEY y OPENAI_VISION_MODEL válidos en el servidor');
   const bounded = (key: string, fallback: number, max: number) => {
     const value = Number(input[key] ?? fallback);
     if (!Number.isInteger(value) || value < 1 || value > max) throw new Error(`${key} inválido`);
@@ -105,7 +111,9 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
     DATABASE_URL: databaseUrl,
     TELEMETRY_MODE: mode,
     JWT_SECRET: secret,
-    AI_PROVIDER: aiProvider as 'mock' | 'disabled',
+    AI_PROVIDER: aiProvider as Environment['AI_PROVIDER'],
+    OPENAI_API_KEY: openaiKey,
+    OPENAI_VISION_MODEL: visionModel,
     AI_MAX_IMAGE_MB: bounded('AI_MAX_IMAGE_MB', 8, 8),
     AI_DAILY_LIMIT_PER_USER: bounded('AI_DAILY_LIMIT_PER_USER', 5, 100),
     AI_REQUEST_TIMEOUT_MS: bounded('AI_REQUEST_TIMEOUT_MS', 10000, 30000),

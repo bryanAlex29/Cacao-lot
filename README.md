@@ -16,6 +16,14 @@ funciones nuevas ni asumir que los cambios locales ya están en GitHub.
 
 ## Estado actual: fase 6.3 (comparación privada de fotografías)
 
+**Diagnóstico visual OpenAI (26/11/2026):** proveedor real implementado detrás de
+`AI_PROVIDER=openai`, con consentimiento externo por foto y resultados orientativos
+de síntomas, posibles causas y cuidados. **Activación/prueba real pendientes de una
+clave nueva privada**; no reutilizar claves compartidas. El perfil local conserva
+`mock`. No prescribe dosis de abono, químicos o litros desde una fotografía.
+Ver [configuración, privacidad y límites](docs/openai-vision.md).
+Las notas inferiores de fases 6.1–6.3 describen la entrega simulada original.
+
 **Regresión múltiple · integración web experimental:** consulta por sonda de
 modelos previamente entrenados/evaluados offline, registro privado versionado y
 comparación con persistencia. No entrena al abrir la web ni inventa resultados
@@ -72,7 +80,7 @@ Fase 5: **rangos min/max por UUID de sensor**, con permisos por propietario, aud
 - Tipos compartidos de telemetría y puertos para desacoplar fuentes demo/reales.
 - Pruebas de configuración, salud HTTP y presentación de disponibilidad.
 
-Hay un flujo fotográfico privado con proveedor IA **simulado**; no hay análisis OpenAI real, predicción hídrica validada ni control remoto de válvula. Las referencias de humedad son experimentales. La telemetría está probada con simulador, **no con ESP32 real**. Alta/habilitación visual de dispositivos para ADMIN propietario disponible; asignación entre cuentas, rotación de claves y administración avanzada pendientes. No desplegar esta base como producto terminado.
+Hay un flujo fotográfico privado con proveedores IA **simulado y OpenAI configurable**; la llamada real a OpenAI requiere una clave privada nueva y validación con una foto autorizada. No hay predicción hídrica validada ni control remoto de válvula. Las referencias de humedad son experimentales. La telemetría está probada con simulador, **no con ESP32 real**. Alta/habilitación visual de dispositivos para ADMIN propietario disponible; asignación entre cuentas, rotación de claves y administración avanzada pendientes. No desplegar esta base como producto terminado.
 
 ## Especificaciones
 

@@ -24,10 +24,11 @@ export class CreateDiagnosisDto {
   requestId!: string;
 
   @ApiProperty({
-    enum: ['demo-v1'],
-    description: 'Consentimiento explícito al procesamiento local simulado y retención indicada',
+    enum: ['demo-v1', 'openai-v1'],
+    description:
+      'Consentimiento explícito al proveedor configurado y retención indicada; openai-v1 autoriza enviar foto y notas a OpenAI',
   })
-  @IsIn(['demo-v1'])
+  @IsIn(['demo-v1', 'openai-v1'])
   consentVersion!: string;
 
   @ApiProperty({

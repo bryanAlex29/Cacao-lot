@@ -8,10 +8,24 @@ const base = {
 describe('Configuración de entorno', () => {
   it('clima desactivado por defecto; exige confirmación no comercial explícita al habilitar', () => {
     expect(validateEnvironment(base).WEATHER_PROVIDER).toBe('disabled');
-    expect(() => validateEnvironment({ ...base, WEATHER_PROVIDER: 'other' })).toThrow('WEATHER_PROVIDER');
+    expect(() => validateEnvironment({ ...base, WEATHER_PROVIDER: 'other' })).toThrow(
+      'WEATHER_PROVIDER',
+    );
     for (const value of [undefined, false, 'false', true])
-      expect(() => validateEnvironment({ ...base, WEATHER_PROVIDER: 'open-meteo', WEATHER_NONCOMMERCIAL_CONFIRMED: value })).toThrow('NONCOMMERCIAL');
-    expect(validateEnvironment({ ...base, WEATHER_PROVIDER: 'open-meteo', WEATHER_NONCOMMERCIAL_CONFIRMED: 'true' }).WEATHER_PROVIDER).toBe('open-meteo');
+      expect(() =>
+        validateEnvironment({
+          ...base,
+          WEATHER_PROVIDER: 'open-meteo',
+          WEATHER_NONCOMMERCIAL_CONFIRMED: value,
+        }),
+      ).toThrow('NONCOMMERCIAL');
+    expect(
+      validateEnvironment({
+        ...base,
+        WEATHER_PROVIDER: 'open-meteo',
+        WEATHER_NONCOMMERCIAL_CONFIRMED: 'true',
+      }).WEATHER_PROVIDER,
+    ).toBe('open-meteo');
   });
   it('aplica valores seguros para desarrollo', () => {
     expect(validateEnvironment(base)).toMatchObject({
@@ -61,7 +75,15 @@ describe('Configuración de entorno', () => {
     expect(() =>
       validateEnvironment({ ...base, NODE_ENV: 'production', AI_PROVIDER: 'mock' }),
     ).toThrow('AI_PROVIDER');
-    expect(() => validateEnvironment({ ...base, AI_PROVIDER: 'openai' })).toThrow('AI_PROVIDER');
+    expect(() => validateEnvironment({ ...base, AI_PROVIDER: 'openai' })).toThrow('OPENAI_API_KEY');
+  });
+  it('OpenAI requiere credencial privada y modelo válido sin exponer sus valores en errores', () => {
+    const config = { ...base, AI_PROVIDER: 'openai', OPENAI_API_KEY: 'test-only-not-a-key' };
+    expect(validateEnvironment(config).OPENAI_VISION_MODEL).toBe('gpt-5.4-mini');
+    expect(validateEnvironment({ ...config, NODE_ENV: 'production' }).AI_PROVIDER).toBe('openai');
+    expect(() => validateEnvironment({ ...config, OPENAI_VISION_MODEL: 'https://other' })).toThrow(
+      'válidos',
+    );
   });
   it.each([
     { AI_MAX_IMAGE_MB: 0 },

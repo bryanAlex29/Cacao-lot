@@ -60,7 +60,7 @@ export type DashboardSection = 'readings' | 'history' | 'irrigation-history' | '
           [class.active]="active() === 'diagnosis'"
           [attr.aria-current]="active() === 'diagnosis' ? 'page' : null"
         >
-          <app-icon name="camera" /> Diagnóstico IA <small class="demo-tag">DEMO</small>
+          <app-icon name="camera" /> Diagnóstico IA
         </a>
         @if (plotId()) {
           @for (item of sections; track item.fragment) {

@@ -99,7 +99,11 @@ export class AiDiagnosisComponent {
                 if (
                   plot.id !== id ||
                   !options ||
-                  options.consentVersion !== 'demo-v1' ||
+                  !(
+                    (options.provider === 'openai' && options.consentVersion === 'openai-v1') ||
+                    ((options.provider === 'mock' || options.provider === 'disabled') &&
+                      options.consentVersion === 'demo-v1')
+                  ) ||
                   options.maxImageBytes < 1 ||
                   options.maxImageBytes > 8 * 1024 * 1024 ||
                   options.retentionDays < 1 ||
@@ -110,7 +114,7 @@ export class AiDiagnosisComponent {
                 }
                 this.plot.set(plot);
                 this.options.set(options);
-                if (options.provider === 'mock') this.loadHistory(0);
+                if (options.provider !== 'disabled') this.loadHistory(0);
               },
               error: () => {
                 this.loading.set(false);
@@ -158,7 +162,7 @@ export class AiDiagnosisComponent {
       !this.currentFile ||
       !this.consent.value ||
       this.notes.value.length > 1000 ||
-      this.options()?.provider !== 'mock'
+      !['mock', 'openai'].includes(this.options()?.provider ?? '')
     ) {
       if (!this.busy())
         this.error.set('Selecciona una foto, revisa las notas y marca el consentimiento.');
@@ -181,6 +185,7 @@ export class AiDiagnosisComponent {
         this.attempt.notes,
         this.attempt.requestId,
         this.attempt.retentionDays,
+        this.options()!.consentVersion,
       )
       .subscribe({
         next: (record) => {

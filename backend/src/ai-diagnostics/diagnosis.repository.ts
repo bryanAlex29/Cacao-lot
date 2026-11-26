@@ -14,6 +14,7 @@ export class DiagnosisRepository {
     payloadHash: string,
     limit: number,
     retentionDays: number,
+    provider: 'mock' | 'openai' = 'mock',
   ) {
     return this.db.$transaction(async (tx) => {
       // Serialize per user: concurrent uploads cannot exceed quota or reserve the same key twice.
@@ -53,6 +54,7 @@ export class DiagnosisRepository {
           plotId: input.plotId,
           requestId: input.requestId,
           payloadHash,
+          provider,
           imageKey: `${id}.jpg`,
           status: 'pending',
           notes: input.notes?.trim() || null,

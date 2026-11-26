@@ -282,6 +282,48 @@ describe('Diagnóstico DEMO privado con PostgreSQL y almacenamiento aislado', ()
       'ANALYSIS_INTERRUPTED',
     );
   });
+  it('OpenAI exige consentimiento externo, persiste proveedor y no reenvía solicitudes existentes', async () => {
+    const own = await account();
+    const demo = await service.create(own.user.id, input(own.plot.id), { buffer: image });
+    const config = app.get(ConfigService);
+    const provider = jest.spyOn(app.get(VisionAnalysisProvider), 'analyze').mockResolvedValue({
+      plantPart: 'unknown',
+      visibleSymptoms: [],
+      possibleCauses: [],
+      uncertainty: 'high',
+      recommendedActions: ['Solicitar fotografías nítidas y revisión técnica.'],
+      requiresExpertReview: true,
+      disclaimer: 'No concluyente; análisis orientativo.',
+    });
+    config.set('AI_PROVIDER', 'openai');
+    try {
+      await upload(own.token, input(own.plot.id)).expect(400);
+      expect(provider).not.toHaveBeenCalled();
+      const body = { ...input(own.plot.id), consentVersion: 'openai-v1' };
+      const record = (await upload(own.token, body).expect(201)).body;
+      expect(record).toMatchObject({ provider: 'openai', source: 'real', status: 'completed' });
+      expect(provider).toHaveBeenCalledTimes(1);
+      const sanitized = provider.mock.calls[0][0];
+      expect((await sharp(sanitized).metadata()).exif).toBeUndefined();
+      expect(provider.mock.calls[0][1]).toBe(body.notes);
+      expect((await upload(own.token, body).expect(201)).body.id).toBe(record.id);
+      expect(provider).toHaveBeenCalledTimes(1);
+      const saved = await db.aiDiagnosis.findUniqueOrThrow({ where: { id: record.id } });
+      expect(saved).toMatchObject({ provider: 'openai', consentVersion: 'openai-v1' });
+      expect(await service.get(demo.id, own.user.id)).toMatchObject({
+        provider: 'mock',
+        source: 'demo',
+      });
+      await request(app.getHttpServer())
+        .get(`/api/v1/ai-diagnostics/${record.id}`)
+        .auth(other.token, { type: 'bearer' })
+        .expect(404);
+      await service.remove(record.id, own.user.id);
+      await expect(service.get(record.id, own.user.id)).rejects.toMatchObject({ status: 404 });
+    } finally {
+      config.set('AI_PROVIDER', 'mock');
+    }
+  });
   it('disabled no procesa imágenes ni afecta salud', async () => {
     const config = app.get(ConfigService);
     config.set('AI_PROVIDER', 'disabled');

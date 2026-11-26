@@ -1,5 +1,7 @@
 <article [attr.aria-label]="label()" [attr.aria-busy]="busy()">
-  <h3>{{ label() }} · DEMO</h3>
+  <h3>
+    {{ label() }} · {{ diagnosis()?.provider === 'openai' ? 'OpenAI · orientativo' : 'DEMO' }}
+  </h3>
   @if (busy()) {
     <p role="status">Consultando diagnóstico y fotografía privados…</p>
   }
@@ -16,7 +18,9 @@
       Estado:
       {{
         record.status === 'completed'
-          ? 'Completado · simulado'
+          ? record.provider === 'openai'
+            ? 'Completado · OpenAI orientativo'
+            : 'Completado · simulado'
           : record.status === 'failed'
             ? 'Fallido'
             : 'Pendiente'
@@ -34,7 +38,7 @@
       <p>{{ record.notes }}</p>
     }
     @if (record.status === 'completed' && record.result; as result) {
-      <h4>Resultado orientativo · DEMO</h4>
+      <h4>Resultado orientativo · {{ record.provider === 'openai' ? 'OpenAI' : 'DEMO' }}</h4>
       <p>
         Parte de la planta:
         {{
@@ -48,7 +52,9 @@
         }}.
       </p>
       <p class="notice">{{ result.disclaimer }}</p>
-      <h4>Observaciones de demostración</h4>
+      <h4>
+        {{ record.provider === 'openai' ? 'Síntomas visibles' : 'Observaciones de demostración' }}
+      </h4>
       <ul>
         @for (symptom of result.visibleSymptoms; track $index) {
           <li>{{ symptom }}</li>
@@ -59,7 +65,13 @@
         @for (cause of result.possibleCauses; track $index) {
           <li>{{ cause.name }}: {{ cause.reason }}</li>
         } @empty {
-          <li>No evaluadas por el proveedor simulado.</li>
+          <li>
+            {{
+              record.provider === 'openai'
+                ? 'Evidencia insuficiente para proponer una causa.'
+                : 'No evaluadas por el proveedor simulado.'
+            }}
+          </li>
         }
       </ul>
       <p>

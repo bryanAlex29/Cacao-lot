@@ -17,8 +17,16 @@
       <span class="eyebrow">SALUD DEL CULTIVO · FOTOGRAFÍAS PRIVADAS</span>
       <h1>Diagnóstico de plantas con IA</h1>
       <p class="notice">
-        DEMO · Proveedor simulado. No se evalúan enfermedades reales ni se envían fotos a OpenAI. No
-        controla el riego. Análisis orientativo, no diagnóstico definitivo.
+        @if (options()?.provider === 'openai') {
+          OpenAI · Análisis visual orientativo de la fotografía, no diagnóstico definitivo. No
+          confirma enfermedades ni determina dosis de abono o litros de agua solo con una foto. No
+          controla el riego.
+        } @else if (options()?.provider === 'mock') {
+          DEMO · Proveedor simulado. No se evalúan enfermedades reales ni se envían fotos a OpenAI.
+          No controla el riego. Análisis orientativo, no diagnóstico definitivo.
+        } @else {
+          Análisis orientativo, no diagnóstico definitivo. No controla el riego.
+        }
       </p>
       @if (loading()) {
         <p role="status">Consultando parcela y límites…</p>
@@ -88,7 +96,7 @@
                       alt="Vista previa de la foto elegida, aún no enviada"
                     />
                     <label
-                      >Síntomas observados (opcional)
+                      >Síntomas y contexto del cultivo (opcional: edad, suelo, riego y evolución)
                       <textarea [formControl]="notes" maxlength="1000" rows="3"></textarea>
                     </label>
                     <p class="help">
@@ -102,9 +110,17 @@
                     <label class="check">
                       <input type="checkbox" [formControl]="consent" />
                       Autorizo procesar y guardar esta foto y mis notas de forma privada en este
-                      servidor, por hasta {{ limits.retentionDays }} días, para una demostración
-                      simulada (demo-v1). Entiendo que no es un análisis real y no se enviará a un
-                      proveedor externo.
+                      servidor, por hasta {{ limits.retentionDays }} días, para un procesamiento
+                      @if (limits.provider === 'openai') {
+                        de análisis visual con OpenAI (openai-v1). Autorizo enviar la copia de la
+                        foto sin EXIF y mis notas a OpenAI, proveedor externo, para este análisis.
+                        Su tratamiento se rige por las políticas de OpenAI; eliminar aquí no
+                        garantiza eliminación inmediata en el proveedor. Puede generar cargos al
+                        proyecto. Entiendo que no confirma enfermedades ni sustituye a un técnico.
+                      } @else {
+                        simulado (demo-v1). Entiendo que no es un análisis real y no se enviará a un
+                        proveedor externo.
+                      }
                     </label>
                     <div class="actions">
                       <button
@@ -115,10 +131,14 @@
                       >
                         {{
                           busy()
-                            ? 'Procesando demostración…'
+                            ? limits.provider === 'openai'
+                              ? 'Analizando fotografía…'
+                              : 'Procesando demostración…'
                             : uncertain()
                               ? 'Reintentar misma solicitud'
-                              : 'Confirmar análisis simulado'
+                              : limits.provider === 'openai'
+                                ? 'Confirmar y analizar con OpenAI'
+                                : 'Confirmar análisis simulado'
                         }}
                       </button>
                       <button type="button" [disabled]="busy()" (click)="clearUpload()">
@@ -140,8 +160,7 @@
                       <app-icon name="camera" />
                       <strong>Vista previa de tu fotografía</strong>
                       <p>
-                        Selecciona una imagen para revisar las notas y autorizar su procesamiento
-                        simulado.
+                        Selecciona una imagen para revisar las notas y autorizar su procesamiento.
                       </p>
                     </div>
                   }
@@ -151,7 +170,10 @@
             @if (selected(); as record) {
               <section class="result-panel" aria-labelledby="result-title">
                 <div class="panel-heading">
-                  <h2 id="result-title"><app-icon name="report" /> Resultado · DEMO</h2>
+                  <h2 id="result-title">
+                    <app-icon name="report" /> Resultado ·
+                    {{ record.provider === 'openai' ? 'OpenAI · orientativo' : 'DEMO' }}
+                  </h2>
                   <span class="badge">2 · Evaluación orientativa</span>
                 </div>
                 <p class="help">
@@ -194,7 +216,13 @@
                     } @else if (record.result; as result) {
                       <p class="notice">{{ result.disclaimer }}</p>
                       <div class="result-block">
-                        <h3>Observaciones de demostración</h3>
+                        <h3>
+                          {{
+                            record.provider === 'openai'
+                              ? 'Síntomas visibles'
+                              : 'Observaciones de demostración'
+                          }}
+                        </h3>
                         <ul>
                           @for (symptom of result.visibleSymptoms; track $index) {
                             <li>{{ symptom }}</li>
@@ -207,7 +235,13 @@
                           @for (cause of result.possibleCauses; track $index) {
                             <li>{{ cause.name }}: {{ cause.reason }}</li>
                           } @empty {
-                            <li>No evaluadas por el proveedor simulado.</li>
+                            <li>
+                              {{
+                                record.provider === 'openai'
+                                  ? 'No hay evidencia suficiente para proponer una causa.'
+                                  : 'No evaluadas por el proveedor simulado.'
+                              }}
+                            </li>
                           }
                         </ul>
                       </div>
@@ -216,7 +250,7 @@
                         Requiere revisión técnica.
                       </p>
                       <div class="result-block next-steps">
-                        <h3>Próximos pasos</h3>
+                        <h3>Próximos pasos · cuidados, agua y nutrición</h3>
                         <ul>
                           @for (action of result.recommendedActions; track $index) {
                             <li>{{ action }}</li>
@@ -234,7 +268,7 @@
             <section aria-labelledby="history-title" [attr.aria-busy]="historyBusy()">
               <div class="panel-heading">
                 <h2 id="history-title">
-                  <app-icon name="history" /> Historial privado de diagnósticos · DEMO
+                  <app-icon name="history" /> Historial privado de diagnósticos
                 </h2>
                 <span class="badge">3 · Consulta y comparación</span>
               </div>
@@ -321,7 +355,9 @@
                     >
                       {{
                         record.status === 'completed'
-                          ? 'Completado · simulado'
+                          ? record.provider === 'openai'
+                            ? 'Completado · OpenAI orientativo'
+                            : 'Completado · simulado'
                           : record.status === 'failed'
                             ? 'Fallido'
                             : 'Pendiente'
@@ -422,13 +458,11 @@
               tabindex="-1"
               aria-labelledby="comparison-title"
             >
-              <h2 id="comparison-title">
-                <app-icon name="plots" /> Comparación de fotografías · DEMO
-              </h2>
+              <h2 id="comparison-title"><app-icon name="plots" /> Comparación de fotografías</h2>
               <p class="notice">
                 Comparación visual manual, sin análisis nuevo ni consumo de tokens. No confirma
-                mejoría, empeoramiento, enfermedad ni eficacia de un tratamiento. Los resultados son
-                simulados y pueden ser idénticos.
+                mejoría, empeoramiento, enfermedad ni eficacia de un tratamiento. Cada resultado
+                identifica su proveedor; los resultados DEMO son simulados.
               </p>
               <p>
                 Elige hasta dos fotos distintas del historial de esta parcela. Verifica que

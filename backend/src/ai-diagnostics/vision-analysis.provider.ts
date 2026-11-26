@@ -10,7 +10,7 @@ export interface VisionResult {
   disclaimer: string;
 }
 export abstract class VisionAnalysisProvider {
-  abstract analyze(image: Buffer): Promise<unknown>;
+  abstract analyze(image: Buffer, notes?: string, signal?: AbortSignal): Promise<unknown>;
 }
 @Injectable()
 export class MockVisionAnalysisProvider extends VisionAnalysisProvider {

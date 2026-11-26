@@ -45,15 +45,19 @@ export class DiagnosisService implements OnModuleInit, OnModuleDestroy {
       maxImageBytes: this.config.get('AI_MAX_IMAGE_MB', { infer: true }) * 1024 * 1024,
       dailyLimit: this.config.get('AI_DAILY_LIMIT_PER_USER', { infer: true }),
       retentionDays: this.config.get('IMAGE_RETENTION_DAYS', { infer: true }),
-      consentVersion: 'demo-v1',
+      consentVersion:
+        this.config.get('AI_PROVIDER', { infer: true }) === 'openai' ? 'openai-v1' : 'demo-v1',
     };
   }
   private requireEnabled(): void {
-    if (this.options().provider !== 'mock')
+    if (this.options().provider === 'disabled')
       throw new ServiceUnavailableException('Diagnóstico no habilitado');
   }
   async create(userId: string, input: CreateDiagnosisDto, file?: { buffer: Buffer }) {
     this.requireEnabled();
+    const provider = this.options().provider;
+    if (input.consentVersion !== this.options().consentVersion)
+      throw new BadRequestException('Revisa y acepta el consentimiento del proveedor actual');
     await this.plots.requireOwned(input.plotId, userId);
     if (!file?.buffer) throw new BadRequestException('Selecciona una imagen');
     const sanitized = await this.images.sanitize(file.buffer);
@@ -74,17 +78,22 @@ export class DiagnosisService implements OnModuleInit, OnModuleDestroy {
       hash,
       this.options().dailyLimit,
       Math.min(input.retentionDays, this.options().retentionDays),
+      provider as 'mock' | 'openai',
     );
     if (!reservation.created) return this.public(reservation.record);
     const record = reservation.record;
     let deadline: NodeJS.Timeout | undefined;
+    const controller = new AbortController();
     try {
       await this.images.put(record.imageKey!, sanitized);
       const output: unknown = await Promise.race([
-        this.provider.analyze(sanitized),
+        this.provider.analyze(sanitized, input.notes?.trim(), controller.signal),
         new Promise<never>((_resolve, reject) => {
           deadline = setTimeout(
-            () => reject(new Error('Analysis timeout')),
+            () => {
+              controller.abort();
+              reject(new Error('Analysis timeout'));
+            },
             this.config.get('AI_REQUEST_TIMEOUT_MS', { infer: true }),
           );
         }),
@@ -174,8 +183,8 @@ export class DiagnosisService implements OnModuleInit, OnModuleDestroy {
       plotId: record.plotId,
       requestId: record.requestId,
       status: record.status,
-      source: 'demo' as const,
-      provider: 'mock' as const,
+      source: record.provider === 'openai' ? ('real' as const) : ('demo' as const),
+      provider: record.provider,
       notes: record.notes,
       result: record.result,
       errorCode: record.errorCode,

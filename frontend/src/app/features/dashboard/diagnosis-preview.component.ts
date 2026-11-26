@@ -7,7 +7,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
   standalone: true,
   imports: [RouterLink, IconComponent],
   template: `<section>
-    <span class="eyebrow">DEMO · PROVEEDOR SIMULADO</span>
+    <span class="eyebrow">FOTOGRAFÍAS PRIVADAS · CONSENTIMIENTO</span>
     <h2>Diagnóstico de plantas con IA</h2>
     <div class="content">
       <div class="plant" aria-hidden="true">
@@ -16,12 +16,13 @@ import { IconComponent } from '../../shared/ui/icon.component';
       <div>
         <h3>Una mirada más a tu cultivo</h3>
         <p>
-          Prueba la subida privada de fotografías y el historial con consentimiento. El proveedor
-          simulado no evalúa enfermedades reales ni envía fotos a OpenAI.
+          Abre la subida privada de fotografías y revisa el proveedor antes de autorizar. Con OpenAI
+          se envía la foto para un análisis orientativo. El proveedor simulado no evalúa
+          enfermedades reales ni envía fotos a OpenAI.
         </p>
         <div class="actions">
           <a class="capture" routerLink="/diagnostico-ia" [queryParams]="{ plotId: plotId() }">
-            <app-icon name="camera" /> Tomar foto o subir imagen · DEMO
+            <app-icon name="camera" /> Tomar foto o subir imagen
           </a>
         </div>
         <p class="navigation-note">Abre la pantalla de captura para elegir y confirmar tu foto.</p>

@@ -17,8 +17,8 @@ export interface Diagnosis {
   plotId: string;
   requestId: string;
   status: 'pending' | 'completed' | 'failed';
-  source: 'demo';
-  provider: 'mock';
+  source: 'demo' | 'real';
+  provider: 'mock' | 'openai';
   notes: string | null;
   result: DiagnosisResult | null;
   errorCode: string | null;
@@ -28,11 +28,11 @@ export interface Diagnosis {
   hasImage: boolean;
 }
 export interface DiagnosisOptions {
-  provider: 'mock' | 'disabled';
+  provider: 'mock' | 'disabled' | 'openai';
   maxImageBytes: number;
   dailyLimit: number;
   retentionDays: number;
-  consentVersion: 'demo-v1';
+  consentVersion: 'demo-v1' | 'openai-v1';
 }
 export interface DiagnosisHistoryFilters {
   status?: Diagnosis['status'];
@@ -43,8 +43,10 @@ function checked(value: Diagnosis, plotId: string): Diagnosis {
   if (
     !value ||
     value.plotId !== plotId ||
-    value.provider !== 'mock' ||
-    value.source !== 'demo' ||
+    !(
+      (value.provider === 'mock' && value.source === 'demo') ||
+      (value.provider === 'openai' && value.source === 'real')
+    ) ||
     !['pending', 'completed', 'failed'].includes(value.status) ||
     typeof value.id !== 'string' ||
     typeof value.requestId !== 'string' ||
@@ -70,17 +72,29 @@ export class AiDiagnosisApi {
   options() {
     return this.http.get<DiagnosisOptions>(`${this.url}/config`).pipe(timeout(8000));
   }
-  create(plotId: string, file: File, notes: string, requestId: string, retentionDays: number) {
+  create(
+    plotId: string,
+    file: File,
+    notes: string,
+    requestId: string,
+    retentionDays: number,
+    consentVersion: DiagnosisOptions['consentVersion'] = 'demo-v1',
+  ) {
     const body = new FormData();
     body.append('plotId', plotId);
     body.append('requestId', requestId);
-    body.append('consentVersion', 'demo-v1');
+    body.append('consentVersion', consentVersion);
     body.append('retentionDays', String(retentionDays));
     if (notes.trim()) body.append('notes', notes.trim());
     body.append('image', file, 'cacao-upload');
     return this.http.post<Diagnosis>(this.url, body).pipe(
       timeout(45000),
-      map((value) => checked(value, plotId)),
+      map((value) => {
+        const record = checked(value, plotId);
+        if (record.provider !== (consentVersion === 'openai-v1' ? 'openai' : 'mock'))
+          throw new Error('Proveedor distinto del autorizado');
+        return record;
+      }),
     );
   }
   list(plotId: string, offset: number, filters: DiagnosisHistoryFilters = {}) {

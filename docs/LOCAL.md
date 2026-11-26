@@ -1,9 +1,13 @@
 # CacaoSmart — uso local para el proyecto estudiantil
 
 No se necesita hosting, dominio ni proxy HTTPS para presentar la web en este PC.
-La base sigue siendo la configurada actualmente en Neon: **no es totalmente
-offline**, requiere internet para PostgreSQL. No se cambia esa configuración.
-OpenAI y la conexión física ESP32 quedan fuera de este incremento.
+La base es la configurada en el `.env` privado del equipo: puede ser PostgreSQL
+local de Docker Compose o Neon. **No sustituir la cadena de conexión al descargar
+una entrega.** Con Neon se requiere internet para PostgreSQL; con una base local
+se necesita Docker Desktop con su motor activo y el servicio `postgres` disponible.
+La conexión física ESP32 permanece pendiente. OpenAI es opcional y requiere
+activación explícita con una clave nueva privada; ver [diagnóstico visual](openai-vision.md).
+El perfil local conserva el proveedor simulado hasta configurar esa activación.
 
 ## Antes de presentar
 
@@ -60,8 +64,29 @@ npm.cmd run dev:backend
 npm.cmd run dev:frontend
 ```
 
-No es necesario Docker cuando `.env` utiliza Neon. No ejecutar `db:up`,
-`setup:env`, `db:migrate` ni cambiar la cadena de conexión para una presentación.
+No es necesario Docker cuando `.env` utiliza Neon. Si la base ya configurada es
+local, abrir Docker Desktop y comprobar `docker compose ps postgres`; si el
+servicio está detenido, `npm.cmd run db:up` inicia el contenedor con su volumen
+existente, sin restablecer la base.
+
+No ejecutar `setup:env`, `db:migrate` ni cambiar la cadena de conexión como parte
+automática de una presentación. Al actualizar código con cambios de esquema,
+revisar primero las migraciones, crear y verificar el respaldo correspondiente
+al proveedor y aplicar únicamente las migraciones pendientes autorizadas. Después,
+`npm.cmd run db:generate` regenera el cliente local; no modifica datos de la base.
+
+### Actualización local verificada — 26/11/2026
+
+Se descargó `12c9b7d` por avance rápido desde `2242a62`, conservando el `.env`
+local existente. Se regeneró Prisma y se aplicó la migración aditiva
+`20261125083000_prediction_model_versions` después de crear y restaurar un
+respaldo privado de 20 tablas. Las 19 tablas anteriores de aplicación conservaron
+conteos y huellas; la tabla nueva quedó vacía. No se copiaron credenciales de Neon
+ni se habilitaron ThingSpeak, clima externo u OpenAI. `local:check`, `local:health`
+y `/login` respondieron correctamente. Pasaron tipos, lint, build backend/frontend,
+518 pruebas backend, 681 de Angular y 9 del lanzador local: 1.208 pruebas aprobadas.
+No se repitieron aquí las suites de integración/navegador. Arrancar no acredita
+integración con hardware real ni una validación completa de la entrega.
 
 ## Detener
 

@@ -42,7 +42,7 @@ describe('Diagnóstico privado DEMO', () => {
       disclaimer: 'Resultado simulado, no diagnóstico real',
     },
   };
-  async function setup() {
+  async function setup(config = options) {
     const user = signal<unknown>({ role: 'FARMER' });
     const route = new BehaviorSubject(convertToParamMap({ plotId: 'plot' }));
     const NativeURL = URL;
@@ -69,7 +69,7 @@ describe('Diagnóstico privado DEMO', () => {
     http
       .expectOne('/api/v1/plots/plot')
       .flush({ id: 'plot', name: 'Cacao', locationLabel: 'Chone', areaM2: null });
-    http.expectOne(base + '/config').flush(options);
+    http.expectOne(base + '/config').flush(config);
     http
       .expectOne(base + '?plotId=plot&limit=10&offset=0')
       .flush({ items: [], total: 0, limit: 10, offset: 0 });
@@ -97,6 +97,31 @@ describe('Diagnóstico privado DEMO', () => {
     component.submit();
     http.expectNone(base);
     expect(component.error()).toContain('consentimiento');
+  });
+  it('OpenAI exige consentimiento explícito y envía openai-v1, preservando DEMO en historial', async () => {
+    const { component, fixture, http } = await setup({
+      ...options,
+      provider: 'openai',
+      consentVersion: 'openai-v1',
+    });
+    file(component);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('proveedor externo');
+    expect(fixture.nativeElement.textContent).toContain('No confirma enfermedades');
+    component.submit();
+    http.expectNone(base);
+    component.consent.setValue(true);
+    component.submit();
+    const req = http.expectOne(base);
+    expect(req.request.body.get('consentVersion')).toBe('openai-v1');
+    const external = { ...record, provider: 'openai', source: 'real', hasImage: false };
+    req.flush(external);
+    http
+      .expectOne(base + '?plotId=plot&limit=10&offset=0')
+      .flush({ items: [external, { ...record, hasImage: false }], total: 2, limit: 10, offset: 0 });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#result-title').textContent).toContain('OpenAI');
+    expect(fixture.nativeElement.textContent).toContain('Completado · simulado');
   });
   it('guía de captura no inventa foto y sustituirla exige consentimiento nuevo', async () => {
     const { component, fixture, http } = await setup();

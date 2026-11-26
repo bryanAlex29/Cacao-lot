@@ -2000,7 +2000,7 @@ describe('Navegador real: simulador → NestJS → PostgreSQL → Socket.IO → 
       const card = diagnosisPage.locator('article').filter({
         has: diagnosisPage.getByRole('heading', { name: 'Cacao · Prueba aislada', exact: true }),
       });
-      await card.getByRole('link', { name: 'Diagnóstico IA · DEMO →', exact: true }).click();
+      await card.getByRole('link', { name: 'Diagnóstico IA →', exact: true }).click();
       await diagnosisPage
         .getByRole('heading', { name: 'Fotografía de la planta', exact: true })
         .waitFor();
