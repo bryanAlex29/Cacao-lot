@@ -22,6 +22,9 @@ export class ThingSpeakImportService implements OnApplicationBootstrap, OnModule
   ) {}
 
   private async binding() {
+    if (process.env.THINGSPEAK_BINDING_JSON) {
+      return parseThingSpeakBinding(JSON.parse(process.env.THINGSPEAK_BINDING_JSON));
+    }
     return parseThingSpeakBinding(
       JSON.parse(await readFile(resolve(__dirname, '../../../.local/thingspeak.json'), 'utf8')),
     );
